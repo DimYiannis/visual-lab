@@ -18,7 +18,7 @@ export const SORT_SIZE = 10
 export const SEARCH_SIZE = 13
 export const MAX_GRAPH_EDGES = 13
 
-export type VizKind = 'graph' | 'array' | 'tree' | 'list' | 'hash' | 'lru' | 'grid' | 'maze'
+export type VizKind = 'graph' | 'array' | 'tree' | 'list' | 'hash' | 'lru' | 'grid' | 'maze' | 'queens'
 
 /** Hash-table bucket count (small prime so collisions happen on screen). */
 export const HASH_BUCKETS = 7
@@ -122,6 +122,12 @@ export interface StepState {
   mazeCurrent: number | null
   mazePath: number[]
   mazeScores: Record<number, string>
+  // N-Queens viz (backtracking) — queensBoard[col] = row, or -1 if empty
+  queensN: number
+  queensBoard: number[]
+  queensCol: number | null
+  queensTryRow: number | null
+  queensConflict: [number, number] | null // [row, col] of the queen causing a block
   // shared
   done: boolean
 }
@@ -137,7 +143,7 @@ export interface AlgoStep {
 export interface AlgoDef {
   id: string
   label: string
-  category: 'Graphs' | 'Sorting' | 'Searching' | 'Data structures' | 'Dynamic programming'
+  category: 'Graphs' | 'Sorting' | 'Searching' | 'Data structures' | 'Dynamic programming' | 'Backtracking'
   viz: VizKind
   complexity: string
   tagline: string
@@ -199,6 +205,11 @@ export function emptyState(): StepState {
     mazeCurrent: null,
     mazePath: [],
     mazeScores: {},
+    queensN: 0,
+    queensBoard: [],
+    queensCol: null,
+    queensTryRow: null,
+    queensConflict: null,
     done: false,
   }
 }
@@ -457,6 +468,41 @@ export const ALGOS: AlgoDef[] = [
       '                heapq.heappush(open_set, (f, nxt))',
       '',
       '    return None  # unreachable',
+    ].join('\n'),
+  },
+  {
+    id: 'nqueens',
+    label: 'N-Queens (backtracking)',
+    category: 'Backtracking',
+    viz: 'queens',
+    complexity: 'O(N!) worst case',
+    tagline: 'Try, fail, undo',
+    lesson:
+      'Backtracking is depth-first search over decisions instead of nodes: place a queen, keep going as long as nothing conflicts, and the instant something does, undo the last choice and try the next option. No cleverness beyond systematic trial and error — checking safety before descending (not after) is what keeps it from ever exploring the full N! placements. The same shape solves Sudoku, maze generation, and constraint scheduling generally.',
+    frontierLabel: '',
+    orderLabel: '',
+    badgeLabel: '',
+    showWeights: false,
+    code: [
+      'def solve(board, col, n):',
+      '    if col == n:',
+      '        return True  # queen placed in every column',
+      '',
+      '    for row in range(n):',
+      '        if is_safe(board, row, col, n):',
+      '            board[col] = row       # place queen',
+      '            if solve(board, col + 1, n):',
+      '                return True',
+      '            board[col] = -1        # backtrack',
+      '',
+      '    return False  # no row works in this column',
+      '',
+      'def is_safe(board, row, col, n):',
+      '    for c in range(col):',
+      '        r = board[c]',
+      '        if r == row or abs(r - row) == abs(c - col):',
+      '            return False',
+      '    return True',
     ].join('\n'),
   },
   {
@@ -1550,6 +1596,84 @@ function runAStar({ w, h, walls, start, goal }: MazeInput): AlgoStep[] {
   return steps
 }
 
+/* ---------------------------------------------------------------------------
+ * N-Queens — backtracking.
+ * ------------------------------------------------------------------------ */
+
+export function pickQueensN(): number {
+  const opts = [5, 6, 7]
+  return opts[Math.floor(Math.random() * opts.length)]
+}
+
+function runNQueens(n: number): AlgoStep[] {
+  const steps: AlgoStep[] = []
+  const board: number[] = Array(n).fill(-1)
+  let col: number | null = null
+  let tryRow: number | null = null
+  let conflict: [number, number] | null = null
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyState(),
+        queensN: n,
+        queensBoard: [...board],
+        queensCol: col,
+        queensTryRow: tryRow,
+        queensConflict: conflict,
+        done,
+      },
+    })
+  }
+
+  const isSafe = (row: number, c: number): [boolean, [number, number] | null] => {
+    for (let cc = 0; cc < c; cc++) {
+      const r = board[cc]
+      if (r === row || Math.abs(r - row) === Math.abs(cc - c)) return [false, [r, cc]]
+    }
+    return [true, null]
+  }
+
+  const solve = (c: number): boolean => {
+    col = c
+    if (c === n) {
+      tryRow = null
+      conflict = null
+      push(3, `Column ${n} reached — every column holds a queen. Solved!`, true)
+      return true
+    }
+    push(5, `Column ${c}: try each row top to bottom.`)
+    for (let row = 0; row < n; row++) {
+      tryRow = row
+      conflict = null
+      push(6, `Check row ${row} in column ${c}.`)
+      const [safe, conf] = isSafe(row, c)
+      if (!safe) {
+        conflict = conf
+        push(18, `Blocked — attacked from (row ${conf![0]}, col ${conf![1]}): same row or diagonal.`)
+        conflict = null
+        continue
+      }
+      board[c] = row
+      tryRow = null
+      push(7, `Clear. Place the queen at (row ${row}, col ${c}).`)
+      if (solve(c + 1)) return true
+      board[c] = -1
+      tryRow = null
+      push(10, `Dead end further down — undo: remove the queen from column ${c}.`)
+    }
+    push(12, `No row works in column ${c} — backtrack to column ${c - 1}.`)
+    return false
+  }
+
+  push(1, `Solve ${n}-Queens: place one queen per column so none attack another.`)
+  solve(0)
+  col = null
+  return steps
+}
+
 function runBubble(input: number[]): AlgoStep[] {
   const steps: AlgoStep[] = []
   const a = [...input]
@@ -2559,6 +2683,7 @@ export const useAlgoStore = defineStore('algorithms', () => {
   /** Bellman-Ford runs on its own graph (needs a guaranteed negative edge). */
   const bfGraph = ref<Graph | null>(null)
   const mazeInput = ref<MazeInput | null>(null)
+  const queensN = ref<number | null>(null)
 
   const trace = ref<AlgoStep[]>([])
   const stepIndex = ref(0)
@@ -2584,6 +2709,10 @@ export const useAlgoStore = defineStore('algorithms', () => {
     }
     if (algo.value.id === 'astar') {
       if (fresh || !mazeInput.value) mazeInput.value = pickMazeInput()
+      return
+    }
+    if (algo.value.id === 'nqueens') {
+      if (fresh || !queensN.value) queensN.value = pickQueensN()
       return
     }
     if (algo.value.viz === 'graph') {
@@ -2635,6 +2764,7 @@ export const useAlgoStore = defineStore('algorithms', () => {
       case 'kruskal': trace.value = runKruskal(graph.value); break
       case 'bellman-ford': trace.value = bfGraph.value ? runBellmanFord(bfGraph.value) : []; break
       case 'astar': trace.value = mazeInput.value ? runAStar(mazeInput.value) : []; break
+      case 'nqueens': trace.value = queensN.value ? runNQueens(queensN.value) : []; break
       case 'bubble': trace.value = runBubble(array.value); break
       case 'insertion': trace.value = runInsertion(array.value); break
       case 'quicksort': trace.value = runQuicksort(array.value); break

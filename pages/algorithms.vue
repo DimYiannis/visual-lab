@@ -15,6 +15,7 @@ import HashViz from '~/components/algo/HashViz.vue'
 import LRUViz from '~/components/algo/LRUViz.vue'
 import GridViz from '~/components/algo/GridViz.vue'
 import MazeViz from '~/components/algo/MazeViz.vue'
+import QueensViz from '~/components/algo/QueensViz.vue'
 import AlgoControls from '~/components/algo/AlgoControls.vue'
 
 const store = useAlgoStore()
@@ -116,7 +117,8 @@ useHead({ title: 'Algorithm Lab — Visual Math Workspace' })
         <HashViz v-else-if="store.algo.viz === 'hash'" :state="store.state" />
         <LRUViz v-else-if="store.algo.viz === 'lru'" :state="store.state" />
         <GridViz v-else-if="store.algo.viz === 'grid'" :state="store.state" />
-        <MazeViz v-else :state="store.state" />
+        <MazeViz v-else-if="store.algo.viz === 'maze'" :state="store.state" />
+        <QueensViz v-else :state="store.state" />
 
         <footer class="relative z-10 mt-2 border-t border-ink-700/60 px-1 pt-2">
           <p class="min-h-[20px] font-display text-sm text-paper" aria-live="polite">

@@ -39,6 +39,7 @@ const newDataLabel = computed(() => {
     case 'lru': return 'New ops'
     case 'grid': return 'New items'
     case 'maze': return 'New maze'
+    case 'queens': return 'New board'
     default: return 'New values'
   }
 })

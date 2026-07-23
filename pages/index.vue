@@ -26,6 +26,12 @@ import WorkspacePanel from '~/components/panels/WorkspacePanel.vue'
         >
           Data structures →
         </NuxtLink>
+        <NuxtLink
+          to="/concurrency"
+          class="font-display text-xs text-paper-dim transition-colors hover:text-live"
+        >
+          Concurrency →
+        </NuxtLink>
       </div>
     </header>
 

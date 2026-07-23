@@ -215,6 +215,9 @@ useHead({ title: 'Data Structures — Visual Math Workspace' })
         <NuxtLink to="/algorithms" class="font-display text-xs text-paper-dim transition-colors hover:text-live">
           Algorithm Lab →
         </NuxtLink>
+        <NuxtLink to="/concurrency" class="font-display text-xs text-paper-dim transition-colors hover:text-live">
+          Concurrency →
+        </NuxtLink>
         <NuxtLink to="/" class="font-display text-xs text-paper-dim transition-colors hover:text-live">
           Math workspace →
         </NuxtLink>

@@ -7,6 +7,11 @@
   # files, no Netlify functions involved.
   # Node 20.9 crashes ("styleText is not exported") inside @clack/core — see CLAUDE.md.
   NODE_VERSION = "22"
+  # Netlify sets NODE_ENV=production during the build, which makes npm skip
+  # devDependencies — but the nuxt CLI itself (plus @vueuse/nuxt,
+  # @nuxtjs/tailwindcss) lives there. Without this, `npm run generate` fails
+  # before anything is written, because `nuxt` doesn't exist to run it.
+  NPM_FLAGS = "--include=dev"
 
 [[redirects]]
   from = "/*"

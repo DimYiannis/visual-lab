@@ -11,7 +11,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
  * timing accident.
  * ------------------------------------------------------------------------ */
 
-export type ConVizKind = 'philosophers' | 'buffer' | 'rwlock'
+export type ConVizKind = 'philosophers' | 'buffer' | 'rwlock' | 'counter' | 'schedule'
 
 const N_PHIL = 5
 const MEALS_TARGET = 2
@@ -32,6 +32,25 @@ export interface ProducerState {
 
 export interface ReaderState {
   id: number
+  done: number
+  target: number
+}
+
+export type CounterPhase = 'idle' | 'read' | 'done'
+
+export interface CounterThreadState {
+  id: number
+  phase: CounterPhase
+  local: number
+  done: number
+  target: number
+}
+
+export interface SchedThreadState {
+  id: string
+  base: number
+  effective: number
+  wait: number
   done: number
   target: number
 }
@@ -62,6 +81,15 @@ export interface ConcurrencyStepState {
   rwReaders: ReaderState[]
   rwCorrupted: boolean
   rwLog: string[]
+  // counter viz (lost-update race)
+  counterValue: number
+  counterThreads: CounterThreadState[]
+  counterExpected: number
+  counterLost: number
+  // schedule viz (starvation/priority)
+  schedThreads: SchedThreadState[]
+  schedHistory: string[]
+  schedTick: number
   // shared
   done: boolean
 }
@@ -85,6 +113,13 @@ function emptyConState(): ConcurrencyStepState {
     rwReaders: [],
     rwCorrupted: false,
     rwLog: [],
+    counterValue: 0,
+    counterThreads: [],
+    counterExpected: 0,
+    counterLost: 0,
+    schedThreads: [],
+    schedHistory: [],
+    schedTick: 0,
     done: false,
   }
 }
@@ -98,7 +133,7 @@ export interface ConcurrencyStep {
 export interface ConcurrencyDef {
   id: string
   label: string
-  category: 'Deadlock' | 'Synchronization'
+  category: 'Deadlock' | 'Synchronization' | 'Fairness'
   viz: ConVizKind
   /** Repurposed complexity-badge slot: the outcome, since that's the point here. */
   outcome: string
@@ -291,6 +326,94 @@ export const CONCURRENCY: ConcurrencyDef[] = [
       '            with lock:',
       '                v = value      # the lock guarantees value is never mid-update',
       '            assert v % 2 == 0  # always holds',
+    ].join('\n'),
+  },
+  {
+    id: 'counter-naive',
+    label: 'Lost-Update Counter · naive',
+    category: 'Synchronization',
+    viz: 'counter',
+    outcome: 'Silently loses updates',
+    tagline: 'The quiet kind of wrong',
+    lesson:
+      "`counter += 1` looks like one step; it is three — read, add, write. Two threads can both read the same starting value, both add 1 in their own head, then both write — and the second write erases the first one’s work completely. Nothing crashes, nothing asserts, no exception anywhere. Both threads finish believing they succeeded. The bug is a number that is just quietly, permanently wrong — the most common real-world race condition, because it never announces itself.",
+    code: [
+      'import threading',
+      '',
+      'counter = 0',
+      '',
+      'class Counter(threading.Thread):',
+      '    def run(self):',
+      '        for _ in range(INCREMENTS):',
+      '            global counter',
+      '            local = counter      # read',
+      '            local = local + 1    # modify (local, not shared yet)',
+      '            counter = local       # write — may clobber another thread’s write',
+    ].join('\n'),
+  },
+  {
+    id: 'counter-fixed',
+    label: 'Lost-Update Counter · fixed',
+    category: 'Synchronization',
+    viz: 'counter',
+    outcome: 'Every update counted',
+    tagline: 'Read, modify, write — as one step',
+    lesson:
+      'The fix is not a smarter counter — it is making read-modify-write actually indivisible, exactly like the readers-writers fix. `counter += 1` still reads, adds, and writes under the hood; the lock just guarantees no other thread can slip in between. Same two threads, same five increments each, but now every single one survives.',
+    code: [
+      'import threading',
+      '',
+      'counter = 0',
+      'lock = threading.Lock()',
+      '',
+      'class Counter(threading.Thread):',
+      '    def run(self):',
+      '        for _ in range(INCREMENTS):',
+      '            global counter',
+      '            with lock:',
+      '                counter += 1   # read, modify, write — all inside the lock',
+    ].join('\n'),
+  },
+  {
+    id: 'starvation-naive',
+    label: 'Priority Scheduling · naive',
+    category: 'Fairness',
+    viz: 'schedule',
+    outcome: 'LOW never runs',
+    tagline: 'Correct, and permanently unfair',
+    lesson:
+      'This is not a correctness bug — nothing is corrupted, nothing deadlocks. A strict-priority scheduler just always runs the highest-priority ready thread, every single tick, exactly as designed. If a high-priority thread is always ready, a low-priority one can be starved forever without the scheduler ever doing anything "wrong." Starvation is what happens when locally-reasonable rules produce a globally unacceptable outcome.',
+    code: [
+      'def schedule(threads):',
+      '    while True:',
+      '        ready = [t for t in threads if t.has_work()]',
+      '        # always the strictly highest priority — ties and',
+      '        # lower-priority threads never get a look in',
+      '        winner = max(ready, key=lambda t: t.priority)',
+      '        winner.run_one_unit_of_work()',
+    ].join('\n'),
+  },
+  {
+    id: 'starvation-fixed',
+    label: 'Priority Scheduling · fixed (aging)',
+    category: 'Fairness',
+    viz: 'schedule',
+    outcome: 'LOW eventually runs',
+    tagline: 'Waiting itself becomes priority',
+    lesson:
+      "Aging adds one rule: the longer a thread waits, the more its effective priority climbs, until it eventually outranks even a thread that never yields. No thread's priority number ever changes permanently — waiting itself is temporary priority. The high-priority thread still runs far more often, which is the point of having priorities at all — but the low one is now mathematically guaranteed to run eventually, not just hopefully.",
+    code: [
+      'def schedule(threads):',
+      '    while True:',
+      '        ready = [t for t in threads if t.has_work()]',
+      '        for t in ready:',
+      '            t.effective = t.priority + t.wait_ticks',
+      '        winner = max(ready, key=lambda t: t.effective)',
+      '        winner.run_one_unit_of_work()',
+      '        winner.wait_ticks = 0',
+      '        for t in ready:',
+      '            if t is not winner:',
+      '                t.wait_ticks += 1',
     ].join('\n'),
   },
 ]
@@ -607,6 +730,150 @@ function runReadersWriters(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
   return steps
 }
 
+/* ---------------------------------------------------------------------------
+ * Lost-Update Counter — two threads incrementing a shared counter. Unlike
+ * every scenario above, the naive run does not crash, hang, or corrupt
+ * anything visibly mid-flight — it just finishes with the wrong number.
+ * ------------------------------------------------------------------------ */
+
+const N_COUNTER_THREADS = 2
+const INCREMENTS_PER_THREAD = 5
+const COUNTER_EXPECTED = N_COUNTER_THREADS * INCREMENTS_PER_THREAD
+
+function runLostUpdateCounter(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+  const steps: ConcurrencyStep[] = []
+  let counter = 0
+  const threads: CounterThreadState[] = Array.from({ length: N_COUNTER_THREADS }, (_, id) => ({
+    id, phase: 'idle', local: 0, done: 0, target: INCREMENTS_PER_THREAD,
+  }))
+  let active: string | null = null
+
+  const lines = variant === 'naive' ? { intro: 3, read: 9, write: 11 } : { intro: 3, read: 11, write: 11 }
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyConState(),
+        counterValue: counter,
+        counterThreads: threads.map(t => ({ ...t })),
+        counterExpected: COUNTER_EXPECTED,
+        counterLost: Math.max(0, COUNTER_EXPECTED - counter),
+        activeActor: active,
+        done,
+      },
+    })
+  }
+
+  push(lines.intro, `2 threads, ${INCREMENTS_PER_THREAD} increments each. Expected final value: ${COUNTER_EXPECTED}.`)
+
+  const maxTicks = 60
+  for (let tick = 0; tick < maxTicks; tick++) {
+    if (threads.every(t => t.done >= t.target)) break
+
+    for (const t of threads) {
+      if (t.done >= t.target) continue
+      active = `T${t.id}`
+
+      if (variant === 'naive') {
+        if (t.phase === 'idle') {
+          t.local = counter
+          t.phase = 'read'
+          push(lines.read, `T${t.id} reads counter = ${t.local} into a local variable.`)
+        } else {
+          counter = t.local + 1
+          t.phase = 'idle'
+          t.done += 1
+          push(lines.write, `T${t.id} writes ${counter} back (its local ${t.local} + 1) — increment #${t.done}.`)
+        }
+      } else {
+        counter += 1
+        t.done += 1
+        push(lines.write, `T${t.id} increments atomically: counter → ${counter}.`)
+      }
+      active = null
+    }
+  }
+
+  const lost = COUNTER_EXPECTED - counter
+  push(
+    lines.write,
+    lost > 0
+      ? `Done. Both threads believe they finished all ${INCREMENTS_PER_THREAD} increments — but the counter reads ${counter}, not ${COUNTER_EXPECTED}. ${lost} update${lost === 1 ? '' : 's'} silently lost.`
+      : `Done. Counter reads ${counter} — exactly the expected ${COUNTER_EXPECTED}. Nothing lost.`,
+    true,
+  )
+  return steps
+}
+
+/* ---------------------------------------------------------------------------
+ * Priority Scheduling / Starvation — a fairness bug, not a correctness one.
+ * Nothing corrupts, nothing deadlocks; a low-priority thread just never
+ * gets picked while a high-priority one is always ready.
+ * ------------------------------------------------------------------------ */
+
+const HIGH_PRIORITY = 10
+const LOW_PRIORITY = 1
+const LOW_TARGET = 3
+const AGING_RATE = 1
+const STARVATION_DEMO_TICKS = 15
+
+function runStarvation(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+  const steps: ConcurrencyStep[] = []
+  const threads: SchedThreadState[] = [
+    { id: 'HIGH', base: HIGH_PRIORITY, effective: HIGH_PRIORITY, wait: 0, done: 0, target: 999 },
+    { id: 'LOW', base: LOW_PRIORITY, effective: LOW_PRIORITY, wait: 0, done: 0, target: LOW_TARGET },
+  ]
+  const history: string[] = []
+  let tick = 0
+
+  const lines = variant === 'naive' ? { intro: 1, run: 7 } : { intro: 1, run: 7 }
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyConState(),
+        schedThreads: threads.map(t => ({ ...t })),
+        schedHistory: [...history],
+        schedTick: tick,
+        activeActor: null,
+        done,
+      },
+    })
+  }
+
+  push(lines.intro, variant === 'naive'
+    ? 'Strict priority: HIGH (priority 10) is always ready, so it always wins. Watch LOW (priority 1).'
+    : 'Aging: every tick a thread waits, its effective priority climbs by 1 — eventually it outranks HIGH.')
+
+  const maxTicks = variant === 'naive' ? STARVATION_DEMO_TICKS : 200
+  for (; tick < maxTicks; tick++) {
+    if (variant === 'fixed' && threads.find(t => t.id === 'LOW')!.done >= LOW_TARGET) break
+
+    for (const t of threads) t.effective = variant === 'naive' ? t.base : t.base + t.wait * AGING_RATE
+    const winner = threads.reduce((a, b) => (b.effective > a.effective ? b : a))
+    winner.done += 1
+    winner.wait = 0
+    for (const t of threads) if (t !== winner) t.wait += 1
+    history.push(winner.id)
+
+    push(lines.run, `Tick ${tick + 1}: ${winner.id} runs (effective priority ${winner.effective}). LOW has run ${threads.find(t => t.id === 'LOW')!.done}/${LOW_TARGET} times.`)
+  }
+
+  const low = threads.find(t => t.id === 'LOW')!
+  push(
+    lines.run,
+    variant === 'naive'
+      ? `After ${STARVATION_DEMO_TICKS} ticks: HIGH ran ${threads.find(t => t.id === 'HIGH')!.done} times, LOW ran ${low.done} times. LOW is starved — nothing will ever change that as long as HIGH stays ready.`
+      : `Done after ${tick} ticks: LOW completed all ${LOW_TARGET} jobs via aging, while HIGH still ran ${threads.find(t => t.id === 'HIGH')!.done} times — priority still matters, but starvation doesn't happen.`,
+    true,
+  )
+  return steps
+}
+
 export const useConcurrencyStore = defineStore('concurrency', () => {
   const conId = ref('philosophers-naive')
   const trace = ref<ConcurrencyStep[]>([])
@@ -627,6 +894,10 @@ export const useConcurrencyStore = defineStore('concurrency', () => {
       case 'producer-consumer-fixed': trace.value = runProducerConsumer('fixed'); break
       case 'readers-writers-naive': trace.value = runReadersWriters('naive'); break
       case 'readers-writers-fixed': trace.value = runReadersWriters('fixed'); break
+      case 'counter-naive': trace.value = runLostUpdateCounter('naive'); break
+      case 'counter-fixed': trace.value = runLostUpdateCounter('fixed'); break
+      case 'starvation-naive': trace.value = runStarvation('naive'); break
+      case 'starvation-fixed': trace.value = runStarvation('fixed'); break
       default: trace.value = []
     }
     stepIndex.value = 0

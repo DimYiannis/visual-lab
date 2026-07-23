@@ -53,6 +53,7 @@ The same code-left/visualization-right/playback shape as the Algorithm Lab, turn
 Every scenario ships as a naive/fixed pair, so the lesson is "one code change removes an entire bug class," not just "here is a bug":
 
 - **Deadlock** — dining philosophers. Naive (everyone reaches for their left fork first) deadlocks every run; fixed (one thread reaches right-first, breaking the symmetry) never does.
-- **Synchronization** — producer-consumer (naive has no capacity check and overflows a bounded buffer under a realistic 3-producer/1-consumer rate mismatch; fixed blocks the producer instead — backpressure) and readers-writers (naive lets an unsynchronized reader catch a writer's update mid-way — a torn read; fixed takes a lock on both sides).
+- **Synchronization** — producer-consumer (naive has no capacity check and overflows a bounded buffer under a realistic 3-producer/1-consumer rate mismatch; fixed blocks the producer instead — backpressure), readers-writers (naive lets an unsynchronized reader catch a writer's update mid-way — a torn read; fixed takes a lock on both sides), and a lost-update counter (naive has two threads read-modify-write a shared counter unsynchronized — both finish believing they succeeded, but the final count is silently wrong; fixed makes the increment atomic).
+- **Fairness** — priority scheduling. Not a correctness bug at all: strict priority starves a low-priority thread forever, exactly as designed; fixed adds aging (waiting itself raises effective priority) so starvation becomes mathematically impossible.
 
-Three distinct bug classes, three fixes: circular wait, missing backpressure, missing mutual exclusion.
+Five distinct bug classes, five fixes: circular wait, missing backpressure, missing mutual exclusion (loud — a torn read) and missing mutual exclusion (silent — a lost update), and plain unfairness.

@@ -10,10 +10,23 @@ import PySourcePanel from '~/components/shared/PySourcePanel.vue'
 import PhilosophersViz from '~/components/concurrency/PhilosophersViz.vue'
 import BufferViz from '~/components/concurrency/BufferViz.vue'
 import RWLockViz from '~/components/concurrency/RWLockViz.vue'
+import CounterViz from '~/components/concurrency/CounterViz.vue'
+import ScheduleViz from '~/components/concurrency/ScheduleViz.vue'
 import ConcurrencyControls from '~/components/concurrency/ConcurrencyControls.vue'
 
 const store = useConcurrencyStore()
 const currentLine = computed(() => store.step?.line ?? 0)
+
+/** Outcome pill: label + whether it reads as a bad (red) or good (green) result. */
+const outcome = computed(() => {
+  const s = store.state
+  if (s.deadlocked) return { label: 'deadlocked', bad: true }
+  if (s.overflowed) return { label: 'overflow', bad: true }
+  if (s.rwCorrupted) return { label: 'torn read', bad: true }
+  if (s.counterLost > 0) return { label: `${s.counterLost} lost`, bad: true }
+  if (store.con.id === 'starvation-naive') return { label: 'starved', bad: true }
+  return { label: 'done', bad: false }
+})
 
 useHead({ title: 'Concurrency Lab — Visual Math Workspace' })
 </script>
@@ -76,15 +89,17 @@ useHead({ title: 'Concurrency Lab — Visual Math Workspace' })
           <span
             v-if="store.state.done"
             class="rounded-full px-2.5 py-0.5 font-mono text-[11px]"
-            :class="(store.state.deadlocked || store.state.overflowed || store.state.rwCorrupted) ? 'bg-danger/10 text-danger' : 'bg-match/10 text-match'"
+            :class="outcome.bad ? 'bg-danger/10 text-danger' : 'bg-match/10 text-match'"
           >
-            {{ store.state.deadlocked ? 'deadlocked' : store.state.overflowed ? 'overflow' : store.state.rwCorrupted ? 'torn read' : 'done' }}
+            {{ outcome.label }}
           </span>
         </header>
 
         <PhilosophersViz v-if="store.con.viz === 'philosophers'" :state="store.state" />
         <BufferViz v-else-if="store.con.viz === 'buffer'" :state="store.state" />
-        <RWLockViz v-else :state="store.state" />
+        <RWLockViz v-else-if="store.con.viz === 'rwlock'" :state="store.state" />
+        <CounterViz v-else-if="store.con.viz === 'counter'" :state="store.state" />
+        <ScheduleViz v-else :state="store.state" />
 
         <footer class="relative z-10 mt-2 border-t border-ink-700/60 px-1 pt-2">
           <p class="min-h-[20px] font-display text-sm text-paper" aria-live="polite">

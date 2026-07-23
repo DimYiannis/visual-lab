@@ -1,6 +1,10 @@
 [build]
   command = "npm run generate"
-  publish = ".output/public"
+  # Locally, `nuxi generate` writes to .output/public — but Nitro detects the
+  # NETLIFY env var during Netlify's own CI and switches its static preset,
+  # writing here instead. Confirmed from an actual Netlify build log
+  # (2026-07-23): "[nitro] Generated public dist".
+  publish = "dist"
 
 [build.environment]
   # ssr: false, WebGL-only SPA — nuxi generate prerenders to plain static

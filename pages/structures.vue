@@ -138,8 +138,8 @@ const TIERS: Tier[] = [
         name: 'Union-Find',
         what: 'Disjoint sets as a forest; find follows parents, union merges roots.',
         ops: ['find/union ~O(1) amortized'],
-        why: "Connectivity queries and Kruskal's MST. Path compression is the magic.",
-        demos: [],
+        why: "Connectivity queries and Kruskal's MST — network design, clustering, image segmentation. Path compression is the magic.",
+        demos: [{ label: "Kruskal's MST", algo: 'kruskal' }],
       },
       {
         name: 'Segment / Fenwick trees',
@@ -180,7 +180,7 @@ const TIERS: Tier[] = [
         what: 'Hash map + doubly linked list: O(1) lookup, O(1) recency bump, evict the tail.',
         ops: ['get/put O(1)'],
         why: 'A lesson in composition: two simple structures combine into something neither can do alone. Real eviction policy in browsers, CDNs and databases.',
-        demos: [],
+        demos: [{ label: 'Get / put / evict', algo: 'lru-cache' }],
       },
       {
         name: 'Suffix trees / arrays',

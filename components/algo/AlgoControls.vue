@@ -36,6 +36,7 @@ const newDataLabel = computed(() => {
     case 'graph': return 'New graph'
     case 'array': return 'New array'
     case 'hash': return 'New keys'
+    case 'lru': return 'New ops'
     default: return 'New values'
   }
 })

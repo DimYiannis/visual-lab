@@ -18,7 +18,7 @@ export const SORT_SIZE = 10
 export const SEARCH_SIZE = 13
 export const MAX_GRAPH_EDGES = 13
 
-export type VizKind = 'graph' | 'array' | 'tree' | 'list' | 'hash'
+export type VizKind = 'graph' | 'array' | 'tree' | 'list' | 'hash' | 'lru'
 
 /** Hash-table bucket count (small prime so collisions happen on screen). */
 export const HASH_BUCKETS = 7
@@ -98,6 +98,12 @@ export interface StepState {
   pendingKeys: number[]
   activeKey: number | null
   activeBucket: number | null
+  // LRU cache viz — list is ordered most- to least-recently-used
+  lruList: Array<{ key: number; value: number }>
+  lruCap: number
+  lruEvicted: number | null
+  opsQueue: string[]
+  opsLog: string[]
   // shared
   done: boolean
 }
@@ -154,6 +160,11 @@ export function emptyState(): StepState {
     pendingKeys: [],
     activeKey: null,
     activeBucket: null,
+    lruList: [],
+    lruCap: 0,
+    lruEvicted: null,
+    opsQueue: [],
+    opsLog: [],
     done: false,
   }
 }
@@ -300,6 +311,47 @@ export const ALGOS: AlgoDef[] = [
       '                heapq.heappush(pq, (d + w, v))',
       '',
       '    return dist',
+    ].join('\n'),
+  },
+  {
+    id: 'kruskal',
+    label: "Kruskal's MST · Union-Find",
+    category: 'Graphs',
+    viz: 'graph',
+    complexity: 'O(E log E)',
+    tagline: 'Cheapest edge that connects two islands',
+    lesson:
+      'Sort edges cheapest first; take one only if its ends are on different islands (Union-Find answers that in nearly O(1)) — same island means a cycle, so skip it. This greedy rule finds the minimum-cost network that connects everyone: the algorithm behind cable/pipeline layout, clustering, and image segmentation.',
+    frontierLabel: 'edges left',
+    orderLabel: 'MST edges',
+    badgeLabel: 'root',
+    showWeights: true,
+    code: [
+      'class UnionFind:',
+      '    def __init__(self, nodes):',
+      '        self.parent = {n: n for n in nodes}',
+      '',
+      '    def find(self, x):',
+      '        while self.parent[x] != x:',
+      '            # path halving: point at grandparent',
+      '            self.parent[x] = self.parent[self.parent[x]]',
+      '            x = self.parent[x]',
+      '        return x',
+      '',
+      '    def union(self, a, b):',
+      '        ra, rb = self.find(a), self.find(b)',
+      '        if ra == rb:',
+      '            return False  # same island: a cycle',
+      '        self.parent[ra] = rb',
+      '        return True',
+      '',
+      'def kruskal(nodes, edges):',
+      '    dsu = UnionFind(nodes)',
+      '    mst = []',
+      '    for u, v, w in sorted(edges, key=lambda e: e[2]):',
+      '        if dsu.union(u, v):',
+      '            mst.append((u, v, w))',
+      '    return mst',
     ].join('\n'),
   },
   {
@@ -627,6 +679,63 @@ export const ALGOS: AlgoDef[] = [
       '        if key in chain:',
       '            return  # already stored',
       '        chain.append(key)',
+    ].join('\n'),
+  },
+  {
+    id: 'lru-cache',
+    label: 'LRU cache',
+    category: 'Data structures',
+    viz: 'lru',
+    complexity: 'O(1) per op',
+    tagline: 'A hash map that remembers order',
+    lesson:
+      'Neither structure alone is enough: a hash map gives O(1) lookup but no sense of order, a linked list gives order but O(n) lookup. Bolt them together — the map stores node references, the list tracks recency — and both operations stay O(1). This exact composition runs eviction in browsers, CDNs, and database buffer pools.',
+    frontierLabel: '',
+    orderLabel: '',
+    badgeLabel: '',
+    showWeights: false,
+    code: [
+      'class Node:',
+      '    def __init__(self, k, v):',
+      '        self.k, self.v = k, v',
+      '        self.prev = self.next = None',
+      '',
+      'class LRUCache:',
+      '    def __init__(self, cap):',
+      '        self.cap = cap',
+      '        self.map = {}',
+      '        self.head = Node(0, 0)   # MRU sentinel',
+      '        self.tail = Node(0, 0)   # LRU sentinel',
+      '        self.head.next = self.tail',
+      '        self.tail.prev = self.head',
+      '',
+      '    def _unlink(self, n):',
+      '        n.prev.next, n.next.prev = n.next, n.prev',
+      '',
+      '    def _push_front(self, n):',
+      '        n.next = self.head.next',
+      '        n.prev = self.head',
+      '        self.head.next.prev = n',
+      '        self.head.next = n',
+      '',
+      '    def get(self, k):',
+      '        if k not in self.map:',
+      '            return -1',
+      '        n = self.map[k]',
+      '        self._unlink(n)',
+      '        self._push_front(n)   # just used: most recent',
+      '        return n.v',
+      '',
+      '    def put(self, k, v):',
+      '        if k in self.map:',
+      '            self._unlink(self.map[k])',
+      '        n = Node(k, v)',
+      '        self.map[k] = n',
+      '        self._push_front(n)',
+      '        if len(self.map) > self.cap:',
+      '            lru = self.tail.prev          # least recently used',
+      '            self._unlink(lru)',
+      '            del self.map[lru.k]',
     ].join('\n'),
   },
 ]
@@ -1002,6 +1111,71 @@ function runDijkstra(g: Graph): AlgoStep[] {
   push(
     17,
     `Done: shortest distances from ${g.start} to ${reached} of ${g.nodes.length} nodes. Violet edges are the shortest-path tree.`,
+    true,
+  )
+  return steps
+}
+
+function runKruskal(g: Graph): AlgoStep[] {
+  const steps: AlgoStep[] = []
+  const parent: Record<string, string> = Object.fromEntries(g.nodes.map(n => [n.id, n.id]))
+  const mstEdges: string[] = []
+  const remaining = [...g.edges].sort((a, b) => a.w - b.w || a.id.localeCompare(b.id))
+  const tree: string[] = []
+  const cut: string[] = []
+  let active: string | null = null
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyState(),
+        activeEdge: active,
+        treeEdges: [...tree],
+        cutEdges: [...cut],
+        frontier: remaining.map(e => `${e.from}-${e.to}·${e.w}`),
+        order: [...mstEdges],
+        badges: Object.fromEntries(g.nodes.map(n => [n.id, parent[n.id]])),
+        done,
+      },
+    })
+  }
+
+  const find = (x: string): string => {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]] // path halving
+      x = parent[x]
+    }
+    return x
+  }
+
+  push(3, 'Every node starts as its own island — its own root.')
+  push(20, `${g.edges.length} edges, sorted cheapest first: that greedy order is the whole algorithm.`)
+
+  while (remaining.length) {
+    const e = remaining.shift()!
+    active = e.id
+    push(22, `Cheapest edge left: ${e.from}–${e.to} (weight ${e.w}).`)
+    const ra = find(e.from)
+    const rb = find(e.to)
+    push(13, `find(${e.from}) = ${ra}, find(${e.to}) = ${rb} — path-halved along the way.`)
+    if (ra === rb) {
+      cut.push(e.id)
+      push(15, `Same island already — adding this edge would close a cycle. Skip.`)
+    } else {
+      parent[ra] = rb
+      tree.push(e.id)
+      mstEdges.push(`${e.from}-${e.to}`)
+      push(16, `Different islands: union them. ${ra}'s island now points at ${rb}.`)
+      push(23, `${e.from}–${e.to} joins the MST — cheapest connector for these two islands.`)
+    }
+    active = null
+  }
+
+  push(
+    25,
+    `Done: ${mstEdges.length} edges connect all ${g.nodes.length} nodes at minimum total weight. ${cut.length} edge${cut.length === 1 ? '' : 's'} skipped as cycles.`,
     true,
   )
   return steps
@@ -1803,6 +1977,101 @@ function runHashTable(keys: number[]): AlgoStep[] {
   return steps
 }
 
+interface LRUInput {
+  cap: number
+  keys: number[]
+  values: number[]
+  updateValue: number
+}
+
+export function pickLRUInput(): LRUInput {
+  const keys = randomValues(5)
+  const values = randomValues(5)
+  const updateValue = randomValues(1)[0]
+  return { cap: 3, keys, values, updateValue }
+}
+
+function runLRU({ cap, keys, values, updateValue }: LRUInput): AlgoStep[] {
+  const steps: AlgoStep[] = []
+  const list: Array<{ key: number; value: number }> = []
+  const opsLog: string[] = []
+  let evicted: number | null = null
+
+  type Op = { verb: 'get' | 'put'; key: number; value?: number; label: string }
+  const plan: Op[] = [
+    { verb: 'put', key: keys[0], value: values[0], label: `put(${keys[0]}, ${values[0]})` },
+    { verb: 'put', key: keys[1], value: values[1], label: `put(${keys[1]}, ${values[1]})` },
+    { verb: 'put', key: keys[2], value: values[2], label: `put(${keys[2]}, ${values[2]})` },
+    { verb: 'get', key: keys[0], label: `get(${keys[0]})` },
+    { verb: 'put', key: keys[3], value: values[3], label: `put(${keys[3]}, ${values[3]})` },
+    { verb: 'get', key: keys[1], label: `get(${keys[1]})` },
+    { verb: 'put', key: keys[4], value: values[4], label: `put(${keys[4]}, ${values[4]})` },
+    { verb: 'put', key: keys[0], value: updateValue, label: `put(${keys[0]}, ${updateValue})` },
+  ]
+  const opsQueue = plan.map(o => o.label)
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyState(),
+        lruList: list.map(n => ({ ...n })),
+        lruCap: cap,
+        lruEvicted: evicted,
+        opsQueue: [...opsQueue],
+        opsLog: [...opsLog],
+        done,
+      },
+    })
+  }
+
+  push(7, `Capacity ${cap}: at most ${cap} entries kept. ${plan.length} operations queued.`)
+
+  for (const op of plan) {
+    opsQueue.shift()
+    evicted = null
+    if (op.verb === 'get') {
+      const idx = list.findIndex(n => n.key === op.key)
+      if (idx === -1) {
+        opsLog.push(`${op.label} → miss`)
+        push(25, `${op.label}: key ${op.key} is not in the map — return -1.`)
+        continue
+      }
+      const [node] = list.splice(idx, 1)
+      push(28, `${op.label}: found it — unlink node ${op.key} from wherever it sits.`)
+      list.unshift(node)
+      opsLog.push(`${op.label} → hit ${node.value}`)
+      push(29, `Push ${op.key} to the front — being read just made it most recent.`)
+      continue
+    }
+    // put
+    const idx = list.findIndex(n => n.key === op.key)
+    if (idx !== -1) {
+      list.splice(idx, 1)
+      push(33, `${op.label}: key ${op.key} already cached — unlink the old node first.`)
+    }
+    list.unshift({ key: op.key, value: op.value! })
+    push(37, `${op.label}: push the new node to the front — most recently used.`)
+    if (list.length > cap) {
+      const stale = list.pop()!
+      evicted = stale.key
+      opsLog.push(`${op.label} → evicted ${stale.key}`)
+      push(40, `Over capacity: drop the tail — key ${stale.key} was least recently used.`)
+    } else {
+      opsLog.push(op.label)
+    }
+  }
+
+  evicted = null
+  push(
+    41,
+    `Done. Final cache, most- to least-recently-used: ${list.map(n => n.key).join(' → ')}.`,
+    true,
+  )
+  return steps
+}
+
 /* ---------------------------------------------------------------------------
  * Store
  * ------------------------------------------------------------------------ */
@@ -1818,6 +2087,7 @@ export const useAlgoStore = defineStore('algorithms', () => {
   /** Trie input: word list + the prefix to autocomplete. */
   const trieWords = ref<string[]>([])
   const triePrefix = ref('')
+  const lruInput = ref<ReturnType<typeof pickLRUInput> | null>(null)
 
   const trace = ref<AlgoStep[]>([])
   const stepIndex = ref(0)
@@ -1863,6 +2133,10 @@ export const useAlgoStore = defineStore('algorithms', () => {
       }
       return
     }
+    if (id === 'lru-cache') {
+      if (fresh || !lruInput.value) lruInput.value = pickLRUInput()
+      return
+    }
     if (fresh || !dsInputs.value[id]) {
       dsInputs.value[id] = randomValues(DS_SIZES[id] ?? 8)
       if (id === 'bst') target.value = pickTarget(dsInputs.value[id])
@@ -1875,6 +2149,7 @@ export const useAlgoStore = defineStore('algorithms', () => {
       case 'bfs': trace.value = runBFS(graph.value); break
       case 'dfs': trace.value = runDFS(graph.value); break
       case 'dijkstra': trace.value = runDijkstra(graph.value); break
+      case 'kruskal': trace.value = runKruskal(graph.value); break
       case 'bubble': trace.value = runBubble(array.value); break
       case 'insertion': trace.value = runInsertion(array.value); break
       case 'quicksort': trace.value = runQuicksort(array.value); break
@@ -1884,6 +2159,7 @@ export const useAlgoStore = defineStore('algorithms', () => {
       case 'bst': trace.value = runBST(dsInputs.value.bst, target.value); break
       case 'linked-list': trace.value = runLinkedList(dsInputs.value['linked-list']); break
       case 'trie': trace.value = runTrie(trieWords.value, triePrefix.value); break
+      case 'lru-cache': trace.value = lruInput.value ? runLRU(lruInput.value) : []; break
       case 'hash-table': trace.value = runHashTable(dsInputs.value['hash-table']); break
       default: trace.value = []
     }

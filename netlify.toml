@@ -1,0 +1,14 @@
+[build]
+  command = "npm run generate"
+  publish = ".output/public"
+
+[build.environment]
+  # ssr: false, WebGL-only SPA — nuxi generate prerenders to plain static
+  # files, no Netlify functions involved.
+  # Node 20.9 crashes ("styleText is not exported") inside @clack/core — see CLAUDE.md.
+  NODE_VERSION = "22"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

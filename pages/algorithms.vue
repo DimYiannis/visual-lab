@@ -12,6 +12,7 @@ import ArrayViz from '~/components/algo/ArrayViz.vue'
 import TreeViz from '~/components/algo/TreeViz.vue'
 import ListViz from '~/components/algo/ListViz.vue'
 import HashViz from '~/components/algo/HashViz.vue'
+import LRUViz from '~/components/algo/LRUViz.vue'
 import AlgoControls from '~/components/algo/AlgoControls.vue'
 
 const store = useAlgoStore()
@@ -110,7 +111,8 @@ useHead({ title: 'Algorithm Lab — Visual Math Workspace' })
           :order-label="store.algo.orderLabel"
         />
         <ListViz v-else-if="store.algo.viz === 'list'" :state="store.state" />
-        <HashViz v-else :state="store.state" />
+        <HashViz v-else-if="store.algo.viz === 'hash'" :state="store.state" />
+        <LRUViz v-else :state="store.state" />
 
         <footer class="relative z-10 mt-2 border-t border-ink-700/60 px-1 pt-2">
           <p class="min-h-[20px] font-display text-sm text-paper" aria-live="polite">

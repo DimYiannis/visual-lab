@@ -9,6 +9,7 @@ import { useConcurrencyStore } from '~/stores/concurrency'
 import PySourcePanel from '~/components/shared/PySourcePanel.vue'
 import PhilosophersViz from '~/components/concurrency/PhilosophersViz.vue'
 import BufferViz from '~/components/concurrency/BufferViz.vue'
+import RWLockViz from '~/components/concurrency/RWLockViz.vue'
 import ConcurrencyControls from '~/components/concurrency/ConcurrencyControls.vue'
 
 const store = useConcurrencyStore()
@@ -65,7 +66,7 @@ useHead({ title: 'Concurrency Lab — Visual Math Workspace' })
       <!-- Visualization (right) -->
       <section
         class="graph-paper graph-paper-dark relative flex min-h-[360px] flex-col overflow-hidden rounded-xl px-3 pb-3 shadow-panel"
-        :aria-label="store.con.viz === 'philosophers' ? 'Dining philosophers visualization' : 'Producer-consumer buffer visualization'"
+        aria-label="Concurrency scenario visualization"
       >
         <header class="relative z-10 flex items-center justify-between px-1 pt-3">
           <div>
@@ -75,14 +76,15 @@ useHead({ title: 'Concurrency Lab — Visual Math Workspace' })
           <span
             v-if="store.state.done"
             class="rounded-full px-2.5 py-0.5 font-mono text-[11px]"
-            :class="(store.state.deadlocked || store.state.overflowed) ? 'bg-danger/10 text-danger' : 'bg-match/10 text-match'"
+            :class="(store.state.deadlocked || store.state.overflowed || store.state.rwCorrupted) ? 'bg-danger/10 text-danger' : 'bg-match/10 text-match'"
           >
-            {{ store.state.deadlocked ? 'deadlocked' : store.state.overflowed ? 'overflow' : 'done' }}
+            {{ store.state.deadlocked ? 'deadlocked' : store.state.overflowed ? 'overflow' : store.state.rwCorrupted ? 'torn read' : 'done' }}
           </span>
         </header>
 
         <PhilosophersViz v-if="store.con.viz === 'philosophers'" :state="store.state" />
-        <BufferViz v-else :state="store.state" />
+        <BufferViz v-else-if="store.con.viz === 'buffer'" :state="store.state" />
+        <RWLockViz v-else :state="store.state" />
 
         <footer class="relative z-10 mt-2 border-t border-ink-700/60 px-1 pt-2">
           <p class="min-h-[20px] font-display text-sm text-paper" aria-live="polite">

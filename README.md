@@ -2,13 +2,14 @@
 
 An interactive lab for learning math and computer science visually. Inspired by GeoGebra: every change — a slider, an equation edit, an algorithm step — has an immediate, intuitive visual effect. Built as a learning tool first: short lessons, one idea at a time, color that always means the same thing.
 
-Three connected pages:
+Four connected pages:
 
 | Page | What it is |
 |---|---|
 | **Math workspace** (`/`) | Live curve vs goal curve: transformations, Riemann sums, derivatives, Taylor series, arc length |
-| **Algorithm Lab** (`/algorithms`) | Python on the left, the data structure reacting on the right, step-by-step playback |
+| **Algorithm Lab** (`/algorithms`) | Python on the left, the algorithm's structure reacting on the right, step-by-step playback |
 | **Data Structures** (`/structures`) | A tiered curriculum map, foundational → specialized, deep-linking into the Lab |
+| **Concurrency Lab** (`/concurrency`) | Same shape as the Algorithm Lab, applied to threads: naive vs fixed, side by side |
 
 ## Math workspace — five paradigms
 
@@ -32,13 +33,26 @@ There is no interpreter: each algorithm's displayed Python is paired with a Type
 
 Current catalogue:
 
-- **Graphs** — Kahn's topological sort, BFS, DFS, Dijkstra
+- **Graphs** — Kahn's topological sort, BFS, DFS, Dijkstra, Kruskal's MST/Union-Find, Bellman-Ford, A* pathfinding
 - **Sorting** — bubble, insertion, quicksort, merge sort
 - **Searching** — binary search
-- **Data structures** — binary min-heap (with its array twin), binary search tree, trie (insert + autocomplete), linked-list reversal, hash table with chaining
+- **Data structures** — binary min-heap (with its array twin), binary search tree, trie (insert + autocomplete), linked-list reversal, hash table with chaining, LRU cache
+- **Dynamic programming** — 0/1 knapsack, filled cell by cell on a live DP table
+- **Backtracking** — N-Queens: place, conflict, undo, on a random-size board each run
 
 Adding an algorithm is one catalogue entry + one runner; the page never changes.
 
 ## Data Structures
 
 A curriculum page ordered from foundational to specialized — what each structure is, its costs, and where it lives in real systems (databases, schedulers, browsers, editors). Structures with a live demo link straight into the Algorithm Lab.
+
+## Concurrency Lab
+
+The same code-left/visualization-right/playback shape as the Algorithm Lab, turned on threads instead of algorithms. There is no real threading — a deterministic round-robin scheduler gives each thread one action per turn, which is what makes a genuine race condition or deadlock *reproducible and scrubbable* instead of a one-time timing accident.
+
+Every scenario ships as a naive/fixed pair, so the lesson is "one code change removes an entire bug class," not just "here is a bug":
+
+- **Deadlock** — dining philosophers. Naive (everyone reaches for their left fork first) deadlocks every run; fixed (one thread reaches right-first, breaking the symmetry) never does.
+- **Synchronization** — producer-consumer (naive has no capacity check and overflows a bounded buffer under a realistic 3-producer/1-consumer rate mismatch; fixed blocks the producer instead — backpressure) and readers-writers (naive lets an unsynchronized reader catch a writer's update mid-way — a torn read; fixed takes a lock on both sides).
+
+Three distinct bug classes, three fixes: circular wait, missing backpressure, missing mutual exclusion.

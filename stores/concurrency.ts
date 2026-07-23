@@ -11,7 +11,7 @@ import { defineStore, acceptHMRUpdate } from 'pinia'
  * timing accident.
  * ------------------------------------------------------------------------ */
 
-export type ConVizKind = 'philosophers' | 'buffer'
+export type ConVizKind = 'philosophers' | 'buffer' | 'rwlock'
 
 const N_PHIL = 5
 const MEALS_TARGET = 2
@@ -28,6 +28,12 @@ export interface ProducerState {
   produced: number
   target: number
   done: boolean
+}
+
+export interface ReaderState {
+  id: number
+  done: number
+  target: number
 }
 
 /**
@@ -49,6 +55,13 @@ export interface ConcurrencyStepState {
   totalItems: number
   overflowed: boolean
   activeActor: string | null
+  // rwlock viz (readers-writers) — value must always be even
+  rwValue: number
+  rwWriterDone: number
+  rwWriterTarget: number
+  rwReaders: ReaderState[]
+  rwCorrupted: boolean
+  rwLog: string[]
   // shared
   done: boolean
 }
@@ -66,6 +79,12 @@ function emptyConState(): ConcurrencyStepState {
     totalItems: 0,
     overflowed: false,
     activeActor: null,
+    rwValue: 0,
+    rwWriterDone: 0,
+    rwWriterTarget: 0,
+    rwReaders: [],
+    rwCorrupted: false,
+    rwLog: [],
     done: false,
   }
 }
@@ -213,6 +232,65 @@ export const CONCURRENCY: ConcurrencyDef[] = [
       '                if buffer:',
       '                    item = buffer.popleft()',
       '                    not_full.notify_all()  # a slot just freed up',
+    ].join('\n'),
+  },
+  {
+    id: 'readers-writers-naive',
+    label: 'Readers-Writers · naive',
+    category: 'Synchronization',
+    viz: 'rwlock',
+    outcome: 'Torn reads — guaranteed',
+    tagline: 'A read caught mid-write',
+    lesson:
+      "A write is rarely one CPU instruction — this one is honestly two. Without a lock, a reader is free to run in the gap between them and observe a value that never should have existed: not the old state, not the new state, something in between. That is a torn read. The invariant here (\"this number is always even\") is deliberately simple so the violation is impossible to miss — real torn reads corrupt structs, pointers, and counters the same way, just less visibly.",
+    code: [
+      'import threading',
+      '',
+      'value = 0',
+      '',
+      'class Writer(threading.Thread):',
+      '    def run(self):',
+      '        for _ in range(WRITES):',
+      '            global value',
+      '            value += 1        # first half of the update',
+      '            value += 1        # second half — a reader could land here',
+      '',
+      'class Reader(threading.Thread):',
+      '    def run(self):',
+      '        for _ in range(READS):',
+      '            v = value          # no lock: might catch a mid-update value',
+      '            assert v % 2 == 0  # invariant: value is always even',
+    ].join('\n'),
+  },
+  {
+    id: 'readers-writers-fixed',
+    label: 'Readers-Writers · fixed',
+    category: 'Synchronization',
+    viz: 'rwlock',
+    outcome: 'Always consistent',
+    tagline: 'Readers wait for the whole write',
+    lesson:
+      'The reader now takes the same lock the writer does — just briefly, to look. That is enough: a reader either sees the value fully before the write or fully after, never mid-way. A real read-write lock goes further and lets many readers overlap each other for throughput (nothing they do can conflict, since none of them mutate anything) while still keeping a writer fully exclusive — but that optimization only makes sense once this correctness property already holds.',
+    code: [
+      'import threading',
+      '',
+      'value = 0',
+      'lock = threading.Lock()',
+      '',
+      'class Writer(threading.Thread):',
+      '    def run(self):',
+      '        for _ in range(WRITES):',
+      '            global value',
+      '            with lock:',
+      '                value += 1     # both halves happen with the lock held',
+      '                value += 1     # no reader can observe the state between them',
+      '',
+      'class Reader(threading.Thread):',
+      '    def run(self):',
+      '        for _ in range(READS):',
+      '            with lock:',
+      '                v = value      # the lock guarantees value is never mid-update',
+      '            assert v % 2 == 0  # always holds',
     ].join('\n'),
   },
 ]
@@ -430,6 +508,105 @@ function runProducerConsumer(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
   return steps
 }
 
+/* ---------------------------------------------------------------------------
+ * Readers-Writers — a shared value that must always be even; a writer's
+ * increment is honestly two steps, so an unsynchronized reader can catch it
+ * mid-update (a torn read).
+ * ------------------------------------------------------------------------ */
+
+const N_READERS = 3
+const WRITES_TARGET = 3
+const READS_TARGET = 3
+
+function runReadersWriters(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+  const steps: ConcurrencyStep[] = []
+  let value = 0
+  let writerDone = 0
+  let writerPhase: 'idle' | 'step1' = 'idle'
+  const readers: ReaderState[] = Array.from({ length: N_READERS }, (_, id) => ({
+    id, done: 0, target: READS_TARGET,
+  }))
+  let corrupted = false
+  let active: string | null = null
+  const log: string[] = []
+
+  const lines = variant === 'naive'
+    ? { intro: 3, read: 15, step1: 9, step2: 10, write: 10 }
+    : { intro: 3, read: 18, step1: 12, step2: 12, write: 12 }
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyConState(),
+        rwValue: value,
+        rwWriterDone: writerDone,
+        rwWriterTarget: WRITES_TARGET,
+        rwReaders: readers.map(r => ({ ...r })),
+        rwCorrupted: corrupted,
+        rwLog: [...log],
+        activeActor: active,
+        done,
+      },
+    })
+  }
+
+  push(lines.intro, `Value starts at ${value} (always even by design). ${N_READERS} readers, 1 writer, ${WRITES_TARGET} writes to perform.`)
+
+  const maxTicks = 40
+  for (let tick = 0; tick < maxTicks; tick++) {
+    if (writerDone >= WRITES_TARGET && readers.every(r => r.done >= r.target)) break
+
+    for (const r of readers) {
+      if (r.done >= r.target) continue
+      active = `R${r.id}`
+      const v = value
+      r.done += 1
+      const ok = v % 2 === 0
+      log.push(`R${r.id} read ${v}${ok ? '' : ' ✗'}`)
+      if (!ok) {
+        corrupted = true
+        push(lines.read, `R${r.id} reads value = ${v} — ODD. It caught the writer mid-update. This is a torn read.`, true)
+        return steps
+      }
+      push(lines.read, `R${r.id} reads value = ${v}. Consistent.`)
+      active = null
+    }
+
+    if (writerDone < WRITES_TARGET) {
+      active = 'W'
+      if (variant === 'naive') {
+        if (writerPhase === 'idle') {
+          value += 1
+          writerPhase = 'step1'
+          push(lines.step1, `Writer begins update #${writerDone + 1}: value → ${value} (mid-update — momentarily inconsistent).`)
+        } else {
+          value += 1
+          writerPhase = 'idle'
+          writerDone += 1
+          push(lines.step2, `Writer finishes update #${writerDone}: value → ${value}.`)
+        }
+      } else {
+        value += 1
+        value += 1
+        writerDone += 1
+        push(lines.write, `Writer holds the lock and updates atomically: value → ${value}. No reader could see it mid-way.`)
+      }
+      active = null
+    }
+  }
+
+  push(
+    lines.read,
+    corrupted
+      ? 'Simulation ended.'
+      : `Done: ${WRITES_TARGET} writes, ${N_READERS * READS_TARGET} reads, every single one consistent.`,
+    true,
+  )
+  return steps
+}
+
 export const useConcurrencyStore = defineStore('concurrency', () => {
   const conId = ref('philosophers-naive')
   const trace = ref<ConcurrencyStep[]>([])
@@ -448,6 +625,8 @@ export const useConcurrencyStore = defineStore('concurrency', () => {
       case 'philosophers-fixed': trace.value = runPhilosophers('fixed'); break
       case 'producer-consumer-naive': trace.value = runProducerConsumer('naive'); break
       case 'producer-consumer-fixed': trace.value = runProducerConsumer('fixed'); break
+      case 'readers-writers-naive': trace.value = runReadersWriters('naive'); break
+      case 'readers-writers-fixed': trace.value = runReadersWriters('fixed'); break
       default: trace.value = []
     }
     stepIndex.value = 0

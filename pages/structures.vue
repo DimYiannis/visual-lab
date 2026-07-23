@@ -119,6 +119,8 @@ const TIERS: Tier[] = [
           { label: 'DFS', algo: 'dfs' },
           { label: 'Topological sort', algo: 'kahn' },
           { label: 'Shortest paths', algo: 'dijkstra' },
+          { label: 'Negative edges', algo: 'bellman-ford' },
+          { label: 'A* pathfinding', algo: 'astar' },
         ],
       },
     ],

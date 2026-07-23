@@ -18,7 +18,7 @@ export const SORT_SIZE = 10
 export const SEARCH_SIZE = 13
 export const MAX_GRAPH_EDGES = 13
 
-export type VizKind = 'graph' | 'array' | 'tree' | 'list' | 'hash' | 'lru'
+export type VizKind = 'graph' | 'array' | 'tree' | 'list' | 'hash' | 'lru' | 'grid' | 'maze'
 
 /** Hash-table bucket count (small prime so collisions happen on screen). */
 export const HASH_BUCKETS = 7
@@ -104,6 +104,24 @@ export interface StepState {
   lruEvicted: number | null
   opsQueue: string[]
   opsLog: string[]
+  // DP grid viz (knapsack) — gridValues sentinel -1 = not yet computed
+  gridValues: number[][]
+  gridRowLabels: string[]
+  gridColLabels: string[]
+  gridActive: [number, number] | null
+  gridSource: Array<[number, number]>
+  gridPath: Array<[number, number]>
+  // maze viz (A*) — cells are flat indices: row * mazeW + col
+  mazeW: number
+  mazeH: number
+  mazeWalls: number[]
+  mazeStart: number
+  mazeGoal: number
+  mazeOpen: number[]
+  mazeClosed: number[]
+  mazeCurrent: number | null
+  mazePath: number[]
+  mazeScores: Record<number, string>
   // shared
   done: boolean
 }
@@ -119,7 +137,7 @@ export interface AlgoStep {
 export interface AlgoDef {
   id: string
   label: string
-  category: 'Graphs' | 'Sorting' | 'Searching' | 'Data structures'
+  category: 'Graphs' | 'Sorting' | 'Searching' | 'Data structures' | 'Dynamic programming'
   viz: VizKind
   complexity: string
   tagline: string
@@ -165,6 +183,22 @@ export function emptyState(): StepState {
     lruEvicted: null,
     opsQueue: [],
     opsLog: [],
+    gridValues: [],
+    gridRowLabels: [],
+    gridColLabels: [],
+    gridActive: null,
+    gridSource: [],
+    gridPath: [],
+    mazeW: 0,
+    mazeH: 0,
+    mazeWalls: [],
+    mazeStart: -1,
+    mazeGoal: -1,
+    mazeOpen: [],
+    mazeClosed: [],
+    mazeCurrent: null,
+    mazePath: [],
+    mazeScores: {},
     done: false,
   }
 }
@@ -352,6 +386,77 @@ export const ALGOS: AlgoDef[] = [
       '        if dsu.union(u, v):',
       '            mst.append((u, v, w))',
       '    return mst',
+    ].join('\n'),
+  },
+  {
+    id: 'bellman-ford',
+    label: 'Bellman-Ford',
+    category: 'Graphs',
+    viz: 'graph',
+    complexity: 'O(V × E)',
+    tagline: 'Slower, but handles negative edges',
+    lesson:
+      "Dijkstra assumes every edge only makes things worse (never negative) — a discount or a refund breaks that assumption. Bellman-Ford drops the priority queue and just relaxes every edge, V−1 times over — brute-force honest, and it can even prove a negative cycle exists by trying one round more. This is why routing protocols like RIP use it: correctness under any weight, not raw speed.",
+    frontierLabel: 'edges this round',
+    orderLabel: 'rounds',
+    badgeLabel: 'distance',
+    showWeights: true,
+    code: [
+      'def bellman_ford(start, nodes, edges):',
+      '    dist = {n: float("inf") for n in nodes}',
+      '    dist[start] = 0',
+      '',
+      '    for i in range(len(nodes) - 1):',
+      '        updated = False',
+      '        for u, v, w in edges:',
+      '            if dist[u] + w < dist[v]:',
+      '                dist[v] = dist[u] + w',
+      '                updated = True',
+      '        if not updated:',
+      '            break  # converged early',
+      '',
+      '    for u, v, w in edges:',
+      '        if dist[u] + w < dist[v]:',
+      '            raise ValueError("negative cycle")',
+      '',
+      '    return dist',
+    ].join('\n'),
+  },
+  {
+    id: 'astar',
+    label: 'A* pathfinding',
+    category: 'Graphs',
+    viz: 'maze',
+    complexity: 'O(E log V) typical',
+    tagline: 'Dijkstra with a hunch',
+    lesson:
+      "Dijkstra expands uniformly in every direction because it knows nothing about where the goal is. A* adds a heuristic — here, straight-line-ish distance to the goal — so cells pointing toward the exit get explored first. Same guarantee of the shortest path (as long as the heuristic never overestimates), far less wasted exploration. This is the algorithm behind game pathfinding and GPS routing.",
+    frontierLabel: '',
+    orderLabel: '',
+    badgeLabel: '',
+    showWeights: false,
+    code: [
+      'import heapq',
+      '',
+      'def astar(start, goal, neighbors):',
+      '    g = {start: 0}',
+      '    open_set = [(heuristic(start, goal), start)]',
+      '    came_from = {}',
+      '',
+      '    while open_set:',
+      '        _, cur = heapq.heappop(open_set)',
+      '        if cur == goal:',
+      '            return reconstruct(came_from, cur)',
+      '',
+      '        for nxt in neighbors(cur):',
+      '            tentative = g[cur] + 1',
+      '            if tentative < g.get(nxt, float("inf")):',
+      '                came_from[nxt] = cur',
+      '                g[nxt] = tentative',
+      '                f = tentative + heuristic(nxt, goal)',
+      '                heapq.heappush(open_set, (f, nxt))',
+      '',
+      '    return None  # unreachable',
     ].join('\n'),
   },
   {
@@ -736,6 +841,35 @@ export const ALGOS: AlgoDef[] = [
       '            lru = self.tail.prev          # least recently used',
       '            self._unlink(lru)',
       '            del self.map[lru.k]',
+    ].join('\n'),
+  },
+  {
+    id: 'knapsack',
+    label: '0/1 Knapsack (DP)',
+    category: 'Dynamic programming',
+    viz: 'grid',
+    complexity: 'O(n × capacity)',
+    tagline: 'Every subproblem, solved once',
+    lesson:
+      'Each cell answers one narrow question — best value using the first i items within capacity c — and every cell after it reuses these answers instead of recomputing them from scratch. That reuse is the entire idea: exponential brute force (try every subset) collapses into one pass over a grid. The same pattern prices trading decisions, aligns DNA sequences, and diffs files.',
+    frontierLabel: '',
+    orderLabel: 'chosen items',
+    badgeLabel: '',
+    showWeights: false,
+    code: [
+      'def knapsack(weights, values, cap):',
+      '    n = len(weights)',
+      '    dp = [[0] * (cap + 1) for _ in range(n + 1)]',
+      '',
+      '    for i in range(1, n + 1):',
+      '        w, v = weights[i - 1], values[i - 1]',
+      '        for c in range(cap + 1):',
+      '            dp[i][c] = dp[i - 1][c]          # skip item i',
+      '            if w <= c:',
+      '                take = v + dp[i - 1][c - w]  # take item i',
+      '                dp[i][c] = max(dp[i][c], take)',
+      '',
+      '    return dp[n][cap]',
     ].join('\n'),
   },
 ]
@@ -1178,6 +1312,241 @@ function runKruskal(g: Graph): AlgoStep[] {
     `Done: ${mstEdges.length} edges connect all ${g.nodes.length} nodes at minimum total weight. ${cut.length} edge${cut.length === 1 ? '' : 's'} skipped as cycles.`,
     true,
   )
+  return steps
+}
+
+/** Bellman-Ford needs at least one negative edge to be worth demonstrating. */
+export function withOneNegativeEdge(g: Graph): Graph {
+  const edges = g.edges.map(e => ({ ...e }))
+  const idx = Math.floor(Math.random() * edges.length)
+  edges[idx] = { ...edges[idx], w: -(1 + Math.floor(Math.random() * 4)) }
+  const adj: Record<string, GraphEdge[]> = Object.fromEntries(g.nodes.map(n => [n.id, [] as GraphEdge[]]))
+  for (const e of edges) adj[e.from].push(e)
+  for (const id of Object.keys(adj)) adj[id].sort((a, b) => a.to.localeCompare(b.to))
+  return { nodes: g.nodes, edges, adj, start: g.start }
+}
+
+function runBellmanFord(g: Graph): AlgoStep[] {
+  const steps: AlgoStep[] = []
+  const INF = Number.POSITIVE_INFINITY
+  const dist: Record<string, number> = Object.fromEntries(g.nodes.map(n => [n.id, INF]))
+  const rounds: string[] = []
+  let active: string | null = null
+  let remaining: string[] = []
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyState(),
+        activeEdge: active,
+        frontier: [...remaining],
+        order: [...rounds],
+        badges: Object.fromEntries(g.nodes.map(n => [n.id, dist[n.id] === INF ? '∞' : String(dist[n.id])])),
+        done,
+      },
+    })
+  }
+
+  push(2, 'Every node starts infinitely far away.')
+  dist[g.start] = 0
+  push(3, `dist[${g.start}] = 0 — we are already there.`)
+
+  const maxRounds = g.nodes.length - 1
+  push(5, `Run ${maxRounds} rounds — one fewer than the node count. A shortest path can use at most that many edges, so this many rounds is always enough.`)
+
+  let round = 0
+  for (round = 1; round <= maxRounds; round++) {
+    let updated = false
+    remaining = g.edges.map(e => `${e.from}→${e.to}·${e.w}`)
+    push(6, `Round ${round}: assume nothing changes until proven otherwise.`)
+    for (const e of g.edges) {
+      active = e.id
+      remaining.shift()
+      const nd = dist[e.from] + e.w
+      if (dist[e.from] !== INF && nd < dist[e.to]) {
+        dist[e.to] = nd
+        updated = true
+        push(9, `dist[${e.from}] + (${e.w}) = ${nd} improves dist[${e.to}] — relax it.`)
+      } else {
+        push(8, `dist[${e.from}] + (${e.w}) doesn't beat dist[${e.to}] — no change.`)
+      }
+      active = null
+    }
+    rounds.push(`round ${round}${updated ? '' : ' — converged'}`)
+    push(11, updated
+      ? `Round ${round} improved at least one distance.`
+      : `Round ${round} changed nothing — every distance is final. Stop early.`)
+    if (!updated) break
+  }
+
+  active = null
+  remaining = g.edges.map(e => `${e.from}→${e.to}·${e.w}`)
+  push(14, 'One more pass over every edge: if anything could still improve, a negative cycle exists.')
+  for (const e of g.edges) {
+    active = e.id
+    remaining.shift()
+    const nd = dist[e.from] + e.w
+    if (dist[e.from] !== INF && nd < dist[e.to]) {
+      push(16, `dist[${e.from}] + (${e.w}) still improves dist[${e.to}] — negative cycle detected.`, true)
+      return steps
+    }
+    active = null
+  }
+  push(16, 'No edge can improve anything further — confirmed safe. (This graph is a DAG, so a negative cycle was never structurally possible — but the check is what makes the algorithm trustworthy on graphs where it is.)')
+
+  const reached = g.nodes.filter(n => dist[n.id] < INF).length
+  push(
+    18,
+    `Done in ${round} round${round === 1 ? '' : 's'} despite the negative edge: shortest distances from ${g.start} to ${reached} of ${g.nodes.length} nodes.`,
+    true,
+  )
+  return steps
+}
+
+/* ---------------------------------------------------------------------------
+ * A* pathfinding — grid maze, generated + verified reachable before use.
+ * ------------------------------------------------------------------------ */
+
+const MAZE_W = 8
+const MAZE_H = 6
+const WALL_DENSITY = 0.22
+
+function mazeNeighbors(idx: number, w: number, h: number): number[] {
+  const r = Math.floor(idx / w)
+  const c = idx % w
+  const out: number[] = []
+  if (r > 0) out.push(idx - w)
+  if (r < h - 1) out.push(idx + w)
+  if (c > 0) out.push(idx - 1)
+  if (c < w - 1) out.push(idx + 1)
+  return out
+}
+
+function mazeReachable(start: number, goal: number, w: number, h: number, walls: Set<number>): boolean {
+  const seen = new Set([start])
+  const queue = [start]
+  while (queue.length) {
+    const u = queue.shift()!
+    if (u === goal) return true
+    for (const v of mazeNeighbors(u, w, h)) {
+      if (!walls.has(v) && !seen.has(v)) {
+        seen.add(v)
+        queue.push(v)
+      }
+    }
+  }
+  return false
+}
+
+export interface MazeInput {
+  w: number
+  h: number
+  walls: number[]
+  start: number
+  goal: number
+}
+
+export function pickMazeInput(): MazeInput {
+  const start = 0
+  const goal = MAZE_H * MAZE_W - 1
+  let walls = new Set<number>()
+  for (let attempt = 0; attempt < 30; attempt++) {
+    walls = new Set<number>()
+    for (let i = 0; i < MAZE_W * MAZE_H; i++) {
+      if (i !== start && i !== goal && Math.random() < WALL_DENSITY) walls.add(i)
+    }
+    if (mazeReachable(start, goal, MAZE_W, MAZE_H, walls)) break
+    if (attempt === 29) walls = new Set()
+  }
+  return { w: MAZE_W, h: MAZE_H, walls: [...walls], start, goal }
+}
+
+function manhattan(a: number, b: number, w: number): number {
+  const ar = Math.floor(a / w), ac = a % w
+  const br = Math.floor(b / w), bc = b % w
+  return Math.abs(ar - br) + Math.abs(ac - bc)
+}
+
+function runAStar({ w, h, walls, start, goal }: MazeInput): AlgoStep[] {
+  const steps: AlgoStep[] = []
+  const wallSet = new Set(walls)
+  const g: Record<number, number> = { [start]: 0 }
+  const cameFrom: Record<number, number> = {}
+  const openHeap: Array<[number, number]> = [[manhattan(start, goal, w), start]]
+  const openSet = new Set([start])
+  const closed = new Set<number>()
+  const scores: Record<number, string> = { [start]: `g0 h${manhattan(start, goal, w)} f${manhattan(start, goal, w)}` }
+  let current: number | null = null
+  let path: number[] = []
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyState(),
+        mazeW: w,
+        mazeH: h,
+        mazeWalls: walls,
+        mazeStart: start,
+        mazeGoal: goal,
+        mazeOpen: [...openSet],
+        mazeClosed: [...closed],
+        mazeCurrent: current,
+        mazePath: [...path],
+        mazeScores: { ...scores },
+        done,
+      },
+    })
+  }
+
+  push(4, `g[start] = 0 — zero steps to reach itself.`)
+  push(5, `Open set seeds with start; priority = h(start) = ${manhattan(start, goal, w)}, the Manhattan distance to the goal.`)
+
+  while (openHeap.length) {
+    openHeap.sort((a, b) => a[0] - b[0])
+    const [f, cur] = openHeap.shift()!
+    openSet.delete(cur)
+    current = cur
+    push(9, `Pop lowest f = ${f}: cell ${cur}. Lower f means "closer to a short path through here to the goal."`)
+
+    if (cur === goal) {
+      const built = [cur]
+      let c = cur
+      while (cameFrom[c] !== undefined) {
+        c = cameFrom[c]
+        built.push(c)
+      }
+      built.reverse()
+      path = built
+      current = null
+      push(11, `Reached the goal — walk came_from back to the start: ${built.length - 1} moves.`, true)
+      return steps
+    }
+
+    closed.add(cur)
+    for (const nxt of mazeNeighbors(cur, w, h)) {
+      if (wallSet.has(nxt)) continue
+      const tentative = g[cur] + 1
+      if (tentative < (g[nxt] ?? Number.POSITIVE_INFINITY)) {
+        cameFrom[nxt] = cur
+        g[nxt] = tentative
+        const hn = manhattan(nxt, goal, w)
+        const fn = tentative + hn
+        scores[nxt] = `g${tentative} h${hn} f${fn}`
+        openHeap.push([fn, nxt])
+        openSet.add(nxt)
+        push(19, `Cell ${nxt}: g=${tentative} via ${cur}, h=${hn}, f=${fn} — best route found so far. Add to open set.`)
+      } else if (g[nxt] !== undefined) {
+        push(15, `Cell ${nxt} already reachable at g=${g[nxt]} — this route (g=${tentative}) isn't better.`)
+      }
+    }
+    current = null
+  }
+
+  push(21, 'Open set emptied without reaching the goal.', true)
   return steps
 }
 
@@ -2072,6 +2441,104 @@ function runLRU({ cap, keys, values, updateValue }: LRUInput): AlgoStep[] {
   return steps
 }
 
+function randomInRange(n: number, min: number, max: number): number[] {
+  const vals = new Set<number>()
+  while (vals.size < n) vals.add(min + Math.floor(Math.random() * (max - min + 1)))
+  return shuffle([...vals])
+}
+
+interface KnapsackInput {
+  weights: number[]
+  values: number[]
+  cap: number
+}
+
+export function pickKnapsackInput(): KnapsackInput {
+  return {
+    weights: randomInRange(5, 2, 7),
+    values: randomInRange(5, 4, 22),
+    cap: 10 + Math.floor(Math.random() * 5), // 10–14: keeps the grid readable
+  }
+}
+
+function runKnapsack({ weights, values, cap }: KnapsackInput): AlgoStep[] {
+  const steps: AlgoStep[] = []
+  const n = weights.length
+  const dp: number[][] = Array.from({ length: n + 1 }, () => Array(cap + 1).fill(-1))
+  const rowLabels = ['∅', ...weights.map((w, i) => `w${i + 1}=${w}, v=${values[i]}`)]
+  const colLabels = Array.from({ length: cap + 1 }, (_, c) => String(c))
+  let active: [number, number] | null = null
+  let source: Array<[number, number]> = []
+  let path: Array<[number, number]> = []
+  const chosen: string[] = []
+
+  const push = (line: number, note: string, done = false) => {
+    steps.push({
+      line,
+      note,
+      state: {
+        ...emptyState(),
+        gridValues: dp.map(row => [...row]),
+        gridRowLabels: rowLabels,
+        gridColLabels: colLabels,
+        gridActive: active,
+        gridSource: [...source],
+        gridPath: [...path],
+        order: [...chosen],
+        done,
+      },
+    })
+  }
+
+  for (let c = 0; c <= cap; c++) dp[0][c] = 0
+  push(3, 'Row 0 = zero items available: 0 value no matter the capacity. The base case needs no work.')
+
+  for (let i = 1; i <= n; i++) {
+    const w = weights[i - 1]
+    const v = values[i - 1]
+    push(6, `Item ${i}: weight ${w}, value ${v}. Fill this row using only row ${i - 1} — the row above.`)
+    for (let c = 0; c <= cap; c++) {
+      active = [i, c]
+      const skipVal = dp[i - 1][c]
+      if (w > c) {
+        source = [[i - 1, c]]
+        dp[i][c] = skipVal
+        push(9, `Item ${i} (weight ${w}) doesn't fit in capacity ${c} — must skip: dp[${i}][${c}] = ${skipVal}.`)
+      } else {
+        const take = v + dp[i - 1][c - w]
+        source = [[i - 1, c], [i - 1, c - w]]
+        dp[i][c] = Math.max(skipVal, take)
+        push(11, `dp[${i}][${c}] = max(skip → ${skipVal}, take → ${v} + dp[${i - 1}][${c - w}] = ${take}) = ${dp[i][c]}.`)
+      }
+    }
+    active = null
+    source = []
+  }
+
+  push(13, `Filled. dp[${n}][${cap}] = ${dp[n][cap]} is the best value — now trace back which items got picked.`)
+  path = [[n, cap]]
+  let bc = cap
+  for (let i = n; i >= 1; i--) {
+    active = [i, bc]
+    if (dp[i][bc] !== dp[i - 1][bc]) {
+      chosen.unshift(`item ${i}`)
+      bc -= weights[i - 1]
+      path.push([i - 1, bc])
+      push(13, `dp[${i}][…] ≠ dp[${i - 1}][…] here — item ${i} was taken. Capacity left: ${bc}.`)
+    } else {
+      path.push([i - 1, bc])
+      push(13, `dp[${i}][…] = dp[${i - 1}][…] here — item ${i} was skipped.`)
+    }
+  }
+  active = null
+  push(
+    13,
+    `Optimal picks: ${chosen.join(', ')}. Total value ${dp[n][cap]} at weight ≤ ${cap} — found by filling ${(n + 1) * (cap + 1)} cells once each, never re-solving a subproblem.`,
+    true,
+  )
+  return steps
+}
+
 /* ---------------------------------------------------------------------------
  * Store
  * ------------------------------------------------------------------------ */
@@ -2088,6 +2555,10 @@ export const useAlgoStore = defineStore('algorithms', () => {
   const trieWords = ref<string[]>([])
   const triePrefix = ref('')
   const lruInput = ref<ReturnType<typeof pickLRUInput> | null>(null)
+  const knapsackInput = ref<ReturnType<typeof pickKnapsackInput> | null>(null)
+  /** Bellman-Ford runs on its own graph (needs a guaranteed negative edge). */
+  const bfGraph = ref<Graph | null>(null)
+  const mazeInput = ref<MazeInput | null>(null)
 
   const trace = ref<AlgoStep[]>([])
   const stepIndex = ref(0)
@@ -2107,6 +2578,14 @@ export const useAlgoStore = defineStore('algorithms', () => {
   }
 
   function ensureInput(fresh: boolean) {
+    if (algo.value.id === 'bellman-ford') {
+      if (fresh || !bfGraph.value) bfGraph.value = withOneNegativeEdge(randomDAG())
+      return
+    }
+    if (algo.value.id === 'astar') {
+      if (fresh || !mazeInput.value) mazeInput.value = pickMazeInput()
+      return
+    }
     if (algo.value.viz === 'graph') {
       if (fresh) graph.value = randomDAG()
       return
@@ -2137,6 +2616,10 @@ export const useAlgoStore = defineStore('algorithms', () => {
       if (fresh || !lruInput.value) lruInput.value = pickLRUInput()
       return
     }
+    if (id === 'knapsack') {
+      if (fresh || !knapsackInput.value) knapsackInput.value = pickKnapsackInput()
+      return
+    }
     if (fresh || !dsInputs.value[id]) {
       dsInputs.value[id] = randomValues(DS_SIZES[id] ?? 8)
       if (id === 'bst') target.value = pickTarget(dsInputs.value[id])
@@ -2150,6 +2633,8 @@ export const useAlgoStore = defineStore('algorithms', () => {
       case 'dfs': trace.value = runDFS(graph.value); break
       case 'dijkstra': trace.value = runDijkstra(graph.value); break
       case 'kruskal': trace.value = runKruskal(graph.value); break
+      case 'bellman-ford': trace.value = bfGraph.value ? runBellmanFord(bfGraph.value) : []; break
+      case 'astar': trace.value = mazeInput.value ? runAStar(mazeInput.value) : []; break
       case 'bubble': trace.value = runBubble(array.value); break
       case 'insertion': trace.value = runInsertion(array.value); break
       case 'quicksort': trace.value = runQuicksort(array.value); break
@@ -2160,6 +2645,7 @@ export const useAlgoStore = defineStore('algorithms', () => {
       case 'linked-list': trace.value = runLinkedList(dsInputs.value['linked-list']); break
       case 'trie': trace.value = runTrie(trieWords.value, triePrefix.value); break
       case 'lru-cache': trace.value = lruInput.value ? runLRU(lruInput.value) : []; break
+      case 'knapsack': trace.value = knapsackInput.value ? runKnapsack(knapsackInput.value) : []; break
       case 'hash-table': trace.value = runHashTable(dsInputs.value['hash-table']); break
       default: trace.value = []
     }
@@ -2217,6 +2703,7 @@ export const useAlgoStore = defineStore('algorithms', () => {
   return {
     algoId,
     graph,
+    bfGraph,
     array,
     target,
     trieWords,

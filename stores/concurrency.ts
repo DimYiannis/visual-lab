@@ -877,14 +877,12 @@ function runStarvation(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
 export const useConcurrencyStore = defineStore('concurrency', () => {
   const conId = ref('philosophers-naive')
   const trace = ref<ConcurrencyStep[]>([])
-  const stepIndex = ref(0)
-  const playing = ref(false)
-  const speed = ref(1)
+  const { stepIndex, playing, speed, atEnd, restart, stepForward, stepBack, seek, togglePlay } =
+    usePlaybackController(() => trace.value.length)
 
   const con = computed(() => CONCURRENCY.find(c => c.id === conId.value) ?? CONCURRENCY[0])
   const step = computed<ConcurrencyStep | undefined>(() => trace.value[stepIndex.value])
   const state = computed<ConcurrencyStepState>(() => step.value?.state ?? emptyConState())
-  const atEnd = computed(() => stepIndex.value >= trace.value.length - 1)
 
   function buildTrace() {
     switch (conId.value) {
@@ -908,34 +906,6 @@ export const useConcurrencyStore = defineStore('concurrency', () => {
     if (id === conId.value) return
     conId.value = id
     buildTrace()
-  }
-
-  function restart() {
-    playing.value = false
-    stepIndex.value = 0
-  }
-
-  function stepForward() {
-    if (atEnd.value) {
-      playing.value = false
-      return
-    }
-    stepIndex.value += 1
-  }
-
-  function stepBack() {
-    playing.value = false
-    if (stepIndex.value > 0) stepIndex.value -= 1
-  }
-
-  function seek(i: number) {
-    playing.value = false
-    stepIndex.value = Math.min(Math.max(0, Math.round(i)), trace.value.length - 1)
-  }
-
-  function togglePlay() {
-    if (!playing.value && atEnd.value) stepIndex.value = 0
-    playing.value = !playing.value
   }
 
   buildTrace()

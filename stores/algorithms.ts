@@ -2686,14 +2686,12 @@ export const useAlgoStore = defineStore('algorithms', () => {
   const queensN = ref<number | null>(null)
 
   const trace = ref<AlgoStep[]>([])
-  const stepIndex = ref(0)
-  const playing = ref(false)
-  const speed = ref(1)
+  const { stepIndex, playing, speed, atEnd, restart, stepForward, stepBack, seek, togglePlay } =
+    usePlaybackController(() => trace.value.length)
 
   const algo = computed(() => ALGOS.find(a => a.id === algoId.value) ?? ALGOS[0])
   const step = computed<AlgoStep | undefined>(() => trace.value[stepIndex.value])
   const state = computed<StepState>(() => step.value?.state ?? emptyState())
-  const atEnd = computed(() => stepIndex.value >= trace.value.length - 1)
 
   const DS_SIZES: Record<string, number> = {
     heap: 7,
@@ -2796,34 +2794,6 @@ export const useAlgoStore = defineStore('algorithms', () => {
   function regenerate() {
     ensureInput(true)
     buildTrace()
-  }
-
-  function stepForward() {
-    if (atEnd.value) {
-      playing.value = false
-      return
-    }
-    stepIndex.value += 1
-  }
-
-  function stepBack() {
-    playing.value = false
-    if (stepIndex.value > 0) stepIndex.value -= 1
-  }
-
-  function seek(i: number) {
-    playing.value = false
-    stepIndex.value = Math.min(Math.max(0, Math.round(i)), trace.value.length - 1)
-  }
-
-  function togglePlay() {
-    if (!playing.value && atEnd.value) stepIndex.value = 0
-    playing.value = !playing.value
-  }
-
-  function restart() {
-    playing.value = false
-    stepIndex.value = 0
   }
 
   // Initial input + trace.

@@ -1,14 +1,16 @@
 <script setup lang="ts">
 /**
- * Playback + scenario picker (bottom). Mirrors AlgoControls.vue's
- * pacing rule: the trace is exact data, the timer is presentation only.
- * No "new data" button here — the scheduler is deterministic, so
- * regenerating would just replay the identical trace.
+ * Scenario picker + playback strip (bottom). Transport/speed/scrubber
+ * markup and timing live in shared components. No "new data" button here
+ * — every scenario is deterministic, so regenerating would just replay
+ * the identical trace.
  */
-import { useIntervalFn } from '@vueuse/core'
+import { storeToRefs } from 'pinia'
 import { useConcurrencyStore, CONCURRENCY } from '~/stores/concurrency'
+import PlaybackTransport from '~/components/shared/PlaybackTransport.vue'
 
 const store = useConcurrencyStore()
+const { playing, speed } = storeToRefs(store)
 
 const categories = computed(() => {
   const groups = new Map<string, typeof CONCURRENCY>()
@@ -19,15 +21,7 @@ const categories = computed(() => {
   return [...groups.entries()]
 })
 
-const SPEEDS = [0.5, 1, 2, 4]
-const BASE_STEP_MS = 500
-const interval = computed(() => BASE_STEP_MS / store.speed)
-
-const { pause, resume } = useIntervalFn(() => store.stepForward(), interval, {
-  immediate: false,
-})
-watch(() => store.playing, p => (p ? resume() : pause()))
-onUnmounted(pause)
+usePlaybackTimer(playing, speed, () => store.stepForward(), 500)
 </script>
 
 <template>
@@ -48,49 +42,18 @@ onUnmounted(pause)
       </select>
     </label>
 
-    <div class="flex items-center gap-1" role="group" aria-label="Step controls">
-      <button class="ctl" aria-label="Restart" @click="store.restart()">⏮</button>
-      <button class="ctl" aria-label="Step back" @click="store.stepBack()">◀</button>
-      <button
-        class="ctl min-w-[72px] font-semibold"
-        :class="store.playing ? 'border-live/70 text-live' : ''"
-        @click="store.togglePlay()"
-      >
-        {{ store.playing ? 'Pause' : 'Play' }}
-      </button>
-      <button class="ctl" aria-label="Step forward" @click="store.stepForward()">▶</button>
-      <button class="ctl" aria-label="Jump to end" @click="store.seek(store.trace.length - 1)">⏭</button>
-    </div>
-
-    <label class="flex items-center gap-2">
-      <span class="font-display text-[11px] uppercase tracking-wider text-paper-faint">Speed</span>
-      <select
-        :value="store.speed"
-        class="rounded-md border border-ink-700 bg-ink-800 px-2 py-1.5 font-mono text-sm text-paper outline-none focus:border-live/60"
-        @change="store.speed = Number(($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="s in SPEEDS" :key="s" :value="s">{{ s }}×</option>
-      </select>
-    </label>
-
-    <div class="flex min-w-[180px] flex-1 items-center gap-3">
-      <input
-        type="range"
-        :min="0"
-        :max="Math.max(store.trace.length - 1, 0)"
-        :value="store.stepIndex"
-        aria-label="Scrub through simulation steps"
-        @input="store.seek(Number(($event.target as HTMLInputElement).value))"
-      >
-      <span class="shrink-0 font-mono text-xs tabular-nums text-paper-dim">
-        {{ store.stepIndex + 1 }} / {{ store.trace.length }}
-      </span>
-    </div>
+    <PlaybackTransport
+      :playing="store.playing"
+      :step-index="store.stepIndex"
+      :trace-length="store.trace.length"
+      :speed="store.speed"
+      @restart="store.restart()"
+      @step-back="store.stepBack()"
+      @toggle-play="store.togglePlay()"
+      @step-forward="store.stepForward()"
+      @jump-to-end="store.seek(store.trace.length - 1)"
+      @seek="store.seek($event)"
+      @update:speed="store.speed = $event"
+    />
   </section>
 </template>
-
-<style scoped>
-.ctl {
-  @apply rounded-md border border-ink-700 bg-ink-800 px-2.5 py-1.5 font-display text-sm text-paper transition-colors hover:border-live/60 hover:text-live;
-}
-</style>

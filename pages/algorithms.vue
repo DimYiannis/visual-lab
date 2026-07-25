@@ -38,11 +38,11 @@ useHead({ title: 'Algorithm Lab — Visual Math Workspace' })
 
 <template>
   <main class="mx-auto flex h-full max-w-7xl flex-col gap-3 p-3 sm:p-4">
-    <header class="flex items-baseline justify-between px-1">
+    <header class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
       <h1 class="font-display text-lg font-700 tracking-tight text-paper">
         Algorithm <span class="text-live">Lab</span>
       </h1>
-      <nav class="flex gap-4">
+      <nav class="flex flex-wrap gap-x-4 gap-y-1">
         <NuxtLink
           to="/structures"
           class="font-display text-xs text-paper-dim transition-colors hover:text-live"

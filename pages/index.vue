@@ -6,11 +6,11 @@ import WorkspacePanel from '~/components/panels/WorkspacePanel.vue'
 
 <template>
   <main class="mx-auto flex h-full max-w-7xl flex-col gap-3 p-3 sm:p-4">
-    <header class="flex items-baseline justify-between px-1">
+    <header class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
       <h1 class="font-display text-lg font-700 tracking-tight text-paper">
         Visual Math <span class="text-live">Workspace</span>
       </h1>
-      <div class="flex items-baseline gap-4">
+      <div class="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         <p class="hidden font-display text-xs text-paper-faint sm:block">
           Move a slider. Watch the curve. Match the goal.
         </p>

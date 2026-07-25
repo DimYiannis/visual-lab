@@ -207,11 +207,11 @@ useHead({ title: 'Data Structures — Visual Math Workspace' })
 
 <template>
   <main class="mx-auto flex min-h-full max-w-7xl flex-col gap-4 p-3 sm:p-4">
-    <header class="flex items-baseline justify-between px-1">
+    <header class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
       <h1 class="font-display text-lg font-700 tracking-tight text-paper">
         Data <span class="text-live">Structures</span>
       </h1>
-      <nav class="flex gap-4">
+      <nav class="flex flex-wrap gap-x-4 gap-y-1">
         <NuxtLink to="/algorithms" class="font-display text-xs text-paper-dim transition-colors hover:text-live">
           Algorithm Lab →
         </NuxtLink>

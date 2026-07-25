@@ -5,7 +5,7 @@
  * here is deadlock: the naive dining-philosophers solution guarantees one,
  * the fixed version (asymmetric fork order) never hits it.
  */
-import { useConcurrencyStore } from '~/stores/concurrency'
+import { useConcurrencyStore, CONCURRENCY } from '~/stores/concurrency'
 import PySourcePanel from '~/components/shared/PySourcePanel.vue'
 import PhilosophersViz from '~/components/concurrency/PhilosophersViz.vue'
 import BufferViz from '~/components/concurrency/BufferViz.vue'
@@ -16,6 +16,17 @@ import ConcurrencyControls from '~/components/concurrency/ConcurrencyControls.vu
 
 const store = useConcurrencyStore()
 const currentLine = computed(() => store.step?.line ?? 0)
+
+// Deep links, e.g. /concurrency?scenario=counter-naive
+const route = useRoute()
+const router = useRouter()
+const requestedScenario = route.query.scenario
+if (typeof requestedScenario === 'string' && CONCURRENCY.some(c => c.id === requestedScenario)) {
+  store.selectCon(requestedScenario)
+}
+watch(() => store.conId, id => router.replace({ query: { ...route.query, scenario: id } }))
+
+useTraceKeyboard(store)
 
 /** Outcome pill: label + whether it reads as a bad (red) or good (green) result. */
 const outcome = computed(() => {

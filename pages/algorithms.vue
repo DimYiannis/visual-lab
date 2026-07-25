@@ -22,10 +22,15 @@ const store = useAlgoStore()
 
 // Deep links from the Data Structures page: /algorithms?algo=heap
 const route = useRoute()
+const router = useRouter()
 const requested = route.query.algo
 if (typeof requested === 'string' && ALGOS.some(a => a.id === requested)) {
   store.selectAlgo(requested)
 }
+// Keep the URL in sync so the current algorithm is bookmarkable/shareable.
+watch(() => store.algoId, id => router.replace({ query: { ...route.query, algo: id } }))
+
+useTraceKeyboard(store)
 
 useHead({ title: 'Algorithm Lab — Visual Math Workspace' })
 </script>

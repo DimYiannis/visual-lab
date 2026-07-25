@@ -7,12 +7,14 @@ export function runBubble(input: number[]): AlgoStep[] {
   const n = a.length
   const locked: number[] = []
   let compare: number[] = []
+  let opsA = 0 // comparisons
+  let opsB = 0 // swaps
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
       line,
       note,
-      state: { ...emptyState(), array: [...a], compare: [...compare], locked: [...locked], done },
+      state: { ...emptyState(), array: [...a], compare: [...compare], locked: [...locked], opsA, opsB, done },
     })
   }
 
@@ -21,10 +23,12 @@ export function runBubble(input: number[]): AlgoStep[] {
     let swapped = false
     for (let j = 0; j < n - 1 - i; j++) {
       compare = [j, j + 1]
+      opsA += 1
       push(6, `Compare a[${j}] = ${a[j]} and a[${j + 1}] = ${a[j + 1]}.`)
       if (a[j] > a[j + 1]) {
         ;[a[j], a[j + 1]] = [a[j + 1], a[j]]
         swapped = true
+        opsB += 1
         push(7, `${a[j + 1]} > ${a[j]} — swap them.`)
       }
     }
@@ -49,6 +53,8 @@ export function runInsertion(input: number[]): AlgoStep[] {
   let compare: number[] = []
   let cursors: Record<string, number> = {}
   let sortedUpto = 0 // prefix [0..sortedUpto] is sorted-so-far
+  let opsA = 0 // comparisons
+  let opsB = 0 // shifts
 
   const push = (line: number, note: string, done = false) => {
     const locked = done
@@ -63,6 +69,8 @@ export function runInsertion(input: number[]): AlgoStep[] {
         compare: [...compare],
         locked,
         cursors: { ...cursors },
+        opsA,
+        opsB,
         done,
       },
     })
@@ -77,12 +85,15 @@ export function runInsertion(input: number[]): AlgoStep[] {
     let j = i - 1
     while (j >= 0 && a[j] > key) {
       compare = [j]
+      opsA += 1
       push(6, `a[${j}] = ${a[j]} > ${key} — it must move right.`)
       a[j + 1] = a[j]
       j -= 1
+      opsB += 1
       cursors = { i, j }
       push(7, `Shift ${a[j + 2]} into slot ${j + 2}.`)
     }
+    opsA += 1 // the failing comparison that stopped the loop (or j < 0)
     a[j + 1] = key
     compare = [j + 1]
     sortedUpto = i
@@ -103,6 +114,8 @@ export function runQuicksort(input: number[]): AlgoStep[] {
   let cursors: Record<string, number> = {}
   let winLo = 0
   let winHi = n - 1
+  let opsA = 0 // comparisons
+  let opsB = 0 // swaps
 
   const push = (line: number, note: string, done = false) => {
     // Ghost everything outside the active partition window (except settled
@@ -120,6 +133,8 @@ export function runQuicksort(input: number[]): AlgoStep[] {
         locked: done ? a.map((_, k) => k) : [...locked],
         discarded,
         cursors: { ...cursors },
+        opsA,
+        opsB,
         done,
       },
     })
@@ -147,10 +162,12 @@ export function runQuicksort(input: number[]): AlgoStep[] {
     for (let j = lo; j < hi; j++) {
       cursors = { lo, hi, p: hi, i, j }
       compare = [j]
+      opsA += 1
       push(10, `a[${j}] = ${a[j]} vs pivot ${pivot}.`)
       if (a[j] < pivot) {
         const moved = a[j]
         ;[a[i], a[j]] = [a[j], a[i]]
+        opsB += 1
         push(
           11,
           i === j
@@ -162,6 +179,7 @@ export function runQuicksort(input: number[]): AlgoStep[] {
       }
     }
     ;[a[i], a[hi]] = [a[hi], a[i]]
+    opsB += 1
     locked.push(i)
     compare = []
     cursors = { lo, hi, i }
@@ -187,6 +205,8 @@ export function runMergesort(input: number[]): AlgoStep[] {
   let cursors: Record<string, number> = {}
   let winLo = 0
   let winHi = n - 1
+  let opsA = 0 // comparisons
+  let opsB = 0 // writes
 
   const push = (line: number, note: string, done = false) => {
     const discarded = done ? [] : a.map((_, k) => k).filter(k => k < winLo || k > winHi)
@@ -200,6 +220,8 @@ export function runMergesort(input: number[]): AlgoStep[] {
         locked: done ? a.map((_, k) => k) : [],
         discarded,
         cursors: { ...cursors },
+        opsA,
+        opsB,
         done,
       },
     })
@@ -239,14 +261,17 @@ export function runMergesort(input: number[]): AlgoStep[] {
     while (i < left.length && j < right.length) {
       compare = [k]
       cursors = { lo, hi, k }
+      opsA += 1
       push(17, `Smaller front: left offers ${left[i]}, right offers ${right[j]}.`)
       if (left[i] <= right[j]) {
         a[k] = left[i]
         i += 1
+        opsB += 1
         push(18, `Take ${a[k]} from the left half → slot ${k}.`)
       } else {
         a[k] = right[j]
         j += 1
+        opsB += 1
         push(20, `Take ${a[k]} from the right half → slot ${k}.`)
       }
       k += 1
@@ -255,6 +280,7 @@ export function runMergesort(input: number[]): AlgoStep[] {
     const rest = fromLeft ? left.slice(i) : right.slice(j)
     if (rest.length) {
       for (let m = 0; m < rest.length; m++) a[k + m] = rest[m]
+      opsB += rest.length
       compare = []
       cursors = { lo, hi, k }
       push(22, `${fromLeft ? 'Left' : 'Right'} half's leftovers slide in: [${rest.join(', ')}].`)

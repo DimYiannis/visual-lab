@@ -15,6 +15,8 @@ export function runKahn(g: Graph): AlgoStep[] {
   const cut: string[] = []
   let current: string | null = null
   let active: string | null = null
+  let opsA = 0 // edges processed
+  let opsB = 0 // nodes dequeued
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -28,6 +30,8 @@ export function runKahn(g: Graph): AlgoStep[] {
         frontier: [...queue],
         order: [...order],
         badges: Object.fromEntries(g.nodes.map(n => [n.id, String(indeg[n.id])])),
+        opsA,
+        opsB,
         done,
       },
     })
@@ -37,6 +41,7 @@ export function runKahn(g: Graph): AlgoStep[] {
   for (const e of g.edges) {
     active = e.id
     indeg[e.to] += 1
+    opsA += 1
     push(7, `${e.from}→${e.to} raises indeg[${e.to}] to ${indeg[e.to]}.`)
   }
   active = null
@@ -47,12 +52,14 @@ export function runKahn(g: Graph): AlgoStep[] {
 
   while (queue.length) {
     current = queue.shift()!
+    opsB += 1
     push(17, `Pop ${current}: its last incoming edge is long gone.`)
     order.push(current)
     push(18, `${current} is safe to schedule next.`)
     for (const e of g.adj[current]) {
       active = e.id
       indeg[e.to] -= 1
+      opsA += 1
       cut.push(e.id)
       push(20, `Cut ${e.from}→${e.to}: indeg[${e.to}] drops to ${indeg[e.to]}.`)
       if (indeg[e.to] === 0) {
@@ -77,6 +84,8 @@ export function runBFS(g: Graph): AlgoStep[] {
   const tree: string[] = []
   let current: string | null = null
   let active: string | null = null
+  let opsA = 0 // edges checked
+  let opsB = 0 // nodes visited
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -90,6 +99,8 @@ export function runBFS(g: Graph): AlgoStep[] {
         frontier: [...queue],
         order: [...order],
         seen: [...seen],
+        opsA,
+        opsB,
         done,
       },
     })
@@ -103,9 +114,11 @@ export function runBFS(g: Graph): AlgoStep[] {
     current = queue.shift()!
     push(9, `Pop ${current} — the oldest node in the queue.`)
     order.push(current)
+    opsB += 1
     push(10, `Visit ${current}.`)
     for (const e of g.adj[current]) {
       active = e.id
+      opsA += 1
       if (!seen.has(e.to)) {
         seen.add(e.to)
         queue.push(e.to)
@@ -138,6 +151,8 @@ export function runDFS(g: Graph): AlgoStep[] {
   const stack: string[] = []
   const tree: string[] = []
   let active: string | null = null
+  let opsA = 0 // edges checked
+  let opsB = 0 // nodes visited
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -151,6 +166,8 @@ export function runDFS(g: Graph): AlgoStep[] {
         frontier: [...stack],
         order: [...order],
         seen: [...seen],
+        opsA,
+        opsB,
         done,
       },
     })
@@ -162,9 +179,11 @@ export function runDFS(g: Graph): AlgoStep[] {
   const visit = (u: string) => {
     stack.push(u)
     order.push(u)
+    opsB += 1
     push(6, `Visit ${u}${stack.length > 1 ? ` (depth ${stack.length})` : ''}.`)
     for (const e of g.adj[u]) {
       active = e.id
+      opsA += 1
       if (!seen.has(e.to)) {
         seen.add(e.to)
         tree.push(e.id)
@@ -206,6 +225,8 @@ export function runDijkstra(g: Graph): AlgoStep[] {
   const settled: string[] = []
   let current: string | null = null
   let active: string | null = null
+  let opsA = 0 // relaxation attempts
+  let opsB = 0 // pops
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -221,6 +242,8 @@ export function runDijkstra(g: Graph): AlgoStep[] {
         badges: Object.fromEntries(
           g.nodes.map(n => [n.id, dist[n.id] === INF ? '∞' : String(dist[n.id])]),
         ),
+        opsA,
+        opsB,
         done,
       },
     })
@@ -235,6 +258,7 @@ export function runDijkstra(g: Graph): AlgoStep[] {
   while (pq.length) {
     pq.sort((a, b) => a[0] - b[0] || a[1].localeCompare(b[1]))
     const [d, u] = pq.shift()!
+    opsB += 1
     current = u
     push(9, `Pop ${u} at distance ${d} — the closest unsettled node.`)
     if (d > dist[u]) {
@@ -245,6 +269,7 @@ export function runDijkstra(g: Graph): AlgoStep[] {
     settled.push(u)
     for (const e of g.adj[u]) {
       active = e.id
+      opsA += 1
       const nd = d + e.w
       if (nd < dist[e.to]) {
         const old = dist[e.to]
@@ -278,6 +303,8 @@ export function runKruskal(g: Graph): AlgoStep[] {
   const tree: string[] = []
   const cut: string[] = []
   let active: string | null = null
+  let opsA = 0 // find calls
+  let opsB = 0 // MST edges
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -291,6 +318,8 @@ export function runKruskal(g: Graph): AlgoStep[] {
         frontier: remaining.map(e => `${e.from}-${e.to}·${e.w}`),
         order: [...mstEdges],
         badges: Object.fromEntries(g.nodes.map(n => [n.id, parent[n.id]])),
+        opsA,
+        opsB,
         done,
       },
     })
@@ -313,6 +342,7 @@ export function runKruskal(g: Graph): AlgoStep[] {
     push(22, `Cheapest edge left: ${e.from}–${e.to} (weight ${e.w}).`)
     const ra = find(e.from)
     const rb = find(e.to)
+    opsA += 2
     push(13, `find(${e.from}) = ${ra}, find(${e.to}) = ${rb} — path-halved along the way.`)
     if (ra === rb) {
       cut.push(e.id)
@@ -321,6 +351,7 @@ export function runKruskal(g: Graph): AlgoStep[] {
       parent[ra] = rb
       tree.push(e.id)
       mstEdges.push(`${e.from}-${e.to}`)
+      opsB += 1
       push(16, `Different islands: union them. ${ra}'s island now points at ${rb}.`)
       push(23, `${e.from}–${e.to} joins the MST — cheapest connector for these two islands.`)
     }
@@ -342,6 +373,8 @@ export function runBellmanFord(g: Graph): AlgoStep[] {
   const rounds: string[] = []
   let active: string | null = null
   let remaining: string[] = []
+  let opsA = 0 // edge checks
+  let opsB = 0 // relaxations
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -353,6 +386,8 @@ export function runBellmanFord(g: Graph): AlgoStep[] {
         frontier: [...remaining],
         order: [...rounds],
         badges: Object.fromEntries(g.nodes.map(n => [n.id, dist[n.id] === INF ? '∞' : String(dist[n.id])])),
+        opsA,
+        opsB,
         done,
       },
     })
@@ -373,10 +408,12 @@ export function runBellmanFord(g: Graph): AlgoStep[] {
     for (const e of g.edges) {
       active = e.id
       remaining.shift()
+      opsA += 1
       const nd = dist[e.from] + e.w
       if (dist[e.from] !== INF && nd < dist[e.to]) {
         dist[e.to] = nd
         updated = true
+        opsB += 1
         push(9, `dist[${e.from}] + (${e.w}) = ${nd} improves dist[${e.to}] — relax it.`)
       } else {
         push(8, `dist[${e.from}] + (${e.w}) doesn't beat dist[${e.to}] — no change.`)
@@ -396,6 +433,7 @@ export function runBellmanFord(g: Graph): AlgoStep[] {
   for (const e of g.edges) {
     active = e.id
     remaining.shift()
+    opsA += 1
     const nd = dist[e.from] + e.w
     if (dist[e.from] !== INF && nd < dist[e.to]) {
       push(16, `dist[${e.from}] + (${e.w}) still improves dist[${e.to}] — negative cycle detected.`, true)

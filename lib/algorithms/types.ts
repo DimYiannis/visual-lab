@@ -98,6 +98,11 @@ export interface StepState {
   queensCol: number | null
   queensTryRow: number | null
   queensConflict: [number, number] | null // [row, col] of the queen causing a block
+  // live operation counters — cumulative, meaning defined per-algorithm by
+  // AlgoDef.opsLabel. This is what makes "bubble sort is O(n²)" a thing you
+  // watch happen instead of a claim you take on faith.
+  opsA: number
+  opsB: number
   // shared
   done: boolean
 }
@@ -123,6 +128,12 @@ export interface AlgoDef {
   badgeLabel: string
   showWeights: boolean
   code: string
+  /**
+   * Labels for the two live operation counters (state.opsA/opsB), e.g.
+   * ['comparisons', 'swaps']. Empty string hides that counter — not every
+   * algorithm has a natural second count.
+   */
+  opsLabel: [string, string]
 }
 
 export function emptyState(): StepState {
@@ -180,6 +191,8 @@ export function emptyState(): StepState {
     queensCol: null,
     queensTryRow: null,
     queensConflict: null,
+    opsA: 0,
+    opsB: 0,
     done: false,
   }
 }

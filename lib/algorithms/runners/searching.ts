@@ -8,6 +8,7 @@ export function runBinarySearch(sorted: number[], target: number): AlgoStep[] {
   let hi = a.length - 1
   let mid: number | null = null
   let found: number | null = null
+  let opsA = 0 // comparisons (probes)
 
   const push = (line: number, note: string, done = false) => {
     const discarded = a.map((_, k) => k).filter(k => k < lo || k > hi)
@@ -23,6 +24,8 @@ export function runBinarySearch(sorted: number[], target: number): AlgoStep[] {
         discarded,
         cursors,
         foundIndex: found,
+        opsA,
+        opsB: 0,
         done,
       },
     })
@@ -31,6 +34,7 @@ export function runBinarySearch(sorted: number[], target: number): AlgoStep[] {
   push(2, `Search window is the whole array: lo = 0, hi = ${hi}. Target: ${target}.`)
   while (lo <= hi) {
     mid = Math.floor((lo + hi) / 2)
+    opsA += 1
     push(5, `mid = (${lo} + ${hi}) // 2 = ${mid}.`)
     if (a[mid] === target) {
       found = mid

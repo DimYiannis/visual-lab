@@ -16,6 +16,8 @@ export function runNQueens(n: number): AlgoStep[] {
   let col: number | null = null
   let tryRow: number | null = null
   let conflict: [number, number] | null = null
+  let opsA = 0 // safety checks
+  let opsB = 0 // placements
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -28,12 +30,15 @@ export function runNQueens(n: number): AlgoStep[] {
         queensCol: col,
         queensTryRow: tryRow,
         queensConflict: conflict,
+        opsA,
+        opsB,
         done,
       },
     })
   }
 
   const isSafe = (row: number, c: number): [boolean, [number, number] | null] => {
+    opsA += 1
     for (let cc = 0; cc < c; cc++) {
       const r = board[cc]
       if (r === row || Math.abs(r - row) === Math.abs(cc - c)) return [false, [r, cc]]
@@ -63,6 +68,7 @@ export function runNQueens(n: number): AlgoStep[] {
       }
       board[c] = row
       tryRow = null
+      opsB += 1
       push(7, `Clear. Place the queen at (row ${row}, col ${c}).`)
       if (solve(c + 1)) return true
       board[c] = -1

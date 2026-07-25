@@ -16,6 +16,7 @@ import LRUViz from '~/components/algo/LRUViz.vue'
 import GridViz from '~/components/algo/GridViz.vue'
 import MazeViz from '~/components/algo/MazeViz.vue'
 import QueensViz from '~/components/algo/QueensViz.vue'
+import OpsCounter from '~/components/algo/OpsCounter.vue'
 import AlgoControls from '~/components/algo/AlgoControls.vue'
 
 const store = useAlgoStore()
@@ -78,6 +79,7 @@ useHead({ title: 'Algorithm Lab — Visual Math Workspace' })
             {{ store.algo.complexity }}
           </span>
         </header>
+        <OpsCounter :labels="store.algo.opsLabel" :ops-a="store.state.opsA" :ops-b="store.state.opsB" />
         <AlgoCodePanel />
         <footer class="relative z-10 border-t border-ink-700/60 px-4 py-3">
           <p class="font-display text-xs leading-relaxed text-paper-dim">

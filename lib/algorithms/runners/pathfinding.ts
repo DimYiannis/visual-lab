@@ -76,6 +76,8 @@ export function runAStar({ w, h, walls, start, goal }: MazeInput): AlgoStep[] {
   const scores: Record<number, string> = { [start]: `g0 h${manhattan(start, goal, w)} f${manhattan(start, goal, w)}` }
   let current: number | null = null
   let path: number[] = []
+  let opsA = 0 // neighbors checked
+  let opsB = 0 // nodes expanded
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -93,6 +95,8 @@ export function runAStar({ w, h, walls, start, goal }: MazeInput): AlgoStep[] {
         mazeCurrent: current,
         mazePath: [...path],
         mazeScores: { ...scores },
+        opsA,
+        opsB,
         done,
       },
     })
@@ -106,6 +110,7 @@ export function runAStar({ w, h, walls, start, goal }: MazeInput): AlgoStep[] {
     const [f, cur] = openHeap.shift()!
     openSet.delete(cur)
     current = cur
+    opsB += 1
     push(9, `Pop lowest f = ${f}: cell ${cur}. Lower f means "closer to a short path through here to the goal."`)
 
     if (cur === goal) {
@@ -125,6 +130,7 @@ export function runAStar({ w, h, walls, start, goal }: MazeInput): AlgoStep[] {
     closed.add(cur)
     for (const nxt of mazeNeighbors(cur, w, h)) {
       if (wallSet.has(nxt)) continue
+      opsA += 1
       const tentative = g[cur] + 1
       if (tentative < (g[nxt] ?? Number.POSITIVE_INFINITY)) {
         cameFrom[nxt] = cur

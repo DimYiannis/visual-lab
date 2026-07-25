@@ -20,6 +20,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: 'queue',
     orderLabel: 'order',
     badgeLabel: 'in-degree',
+    opsLabel: ['edges processed', 'nodes dequeued'],
     showWeights: false,
     code: [
       'from collections import deque',
@@ -63,6 +64,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: 'queue',
     orderLabel: 'visit order',
     badgeLabel: '',
+    opsLabel: ['edges checked', 'nodes visited'],
     showWeights: false,
     code: [
       'from collections import deque',
@@ -95,6 +97,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: 'call stack',
     orderLabel: 'visit order',
     badgeLabel: '',
+    opsLabel: ['edges checked', 'nodes visited'],
     showWeights: false,
     code: [
       'def dfs(start, adj):',
@@ -124,6 +127,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: 'priority queue',
     orderLabel: 'settled',
     badgeLabel: 'distance',
+    opsLabel: ['relaxations', 'pops'],
     showWeights: true,
     code: [
       'import heapq',
@@ -157,6 +161,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: 'edges left',
     orderLabel: 'MST edges',
     badgeLabel: 'root',
+    opsLabel: ['find calls', 'MST edges'],
     showWeights: true,
     code: [
       'class UnionFind:',
@@ -198,6 +203,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: 'edges this round',
     orderLabel: 'rounds',
     badgeLabel: 'distance',
+    opsLabel: ['edge checks', 'relaxations'],
     showWeights: true,
     code: [
       'def bellman_ford(start, nodes, edges):',
@@ -232,6 +238,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['neighbors checked', 'nodes expanded'],
     showWeights: false,
     code: [
       'import heapq',
@@ -269,6 +276,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['safety checks', 'placements'],
     showWeights: false,
     code: [
       'def solve(board, col, n):',
@@ -304,6 +312,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['comparisons', 'swaps'],
     showWeights: false,
     code: [
       'def bubble_sort(a):',
@@ -331,6 +340,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['comparisons', 'shifts'],
     showWeights: false,
     code: [
       'def insertion_sort(a):',
@@ -357,6 +367,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['comparisons', 'swaps'],
     showWeights: false,
     code: [
       'def quicksort(a, lo=0, hi=None):',
@@ -390,6 +401,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['comparisons', 'writes'],
     showWeights: false,
     code: [
       'def merge_sort(a, lo=0, hi=None):',
@@ -429,6 +441,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['comparisons', ''],
     showWeights: false,
     code: [
       'def binary_search(a, target):',
@@ -458,6 +471,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: 'extracted',
     badgeLabel: '',
+    opsLabel: ['comparisons', 'swaps'],
     showWeights: false,
     code: [
       'class MinHeap:',
@@ -504,6 +518,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['comparisons', ''],
     showWeights: false,
     code: [
       'def insert(root, v):',
@@ -536,6 +551,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['pointer reassignments', ''],
     showWeights: false,
     code: [
       'class Node:',
@@ -566,6 +582,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: 'completions',
     badgeLabel: '',
+    opsLabel: ['char comparisons', 'nodes created'],
     showWeights: false,
     code: [
       'class TrieNode:',
@@ -603,6 +620,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['keys hashed', 'collisions'],
     showWeights: false,
     code: [
       'class HashTable:',
@@ -631,6 +649,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: '',
     badgeLabel: '',
+    opsLabel: ['ops processed', 'evictions'],
     showWeights: false,
     code: [
       'class Node:',
@@ -688,6 +707,7 @@ export const ALGOS: AlgoDef[] = [
     frontierLabel: '',
     orderLabel: 'chosen items',
     badgeLabel: '',
+    opsLabel: ['cells filled', 'backtrack steps'],
     showWeights: false,
     code: [
       'def knapsack(weights, values, cap):',

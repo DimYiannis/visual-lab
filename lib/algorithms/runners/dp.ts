@@ -26,6 +26,8 @@ export function runKnapsack({ weights, values, cap }: KnapsackInput): AlgoStep[]
   let source: Array<[number, number]> = []
   let path: Array<[number, number]> = []
   const chosen: string[] = []
+  let opsA = 0 // cells filled
+  let opsB = 0 // backtrack steps
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -40,6 +42,8 @@ export function runKnapsack({ weights, values, cap }: KnapsackInput): AlgoStep[]
         gridSource: [...source],
         gridPath: [...path],
         order: [...chosen],
+        opsA,
+        opsB,
         done,
       },
     })
@@ -55,6 +59,7 @@ export function runKnapsack({ weights, values, cap }: KnapsackInput): AlgoStep[]
     for (let c = 0; c <= cap; c++) {
       active = [i, c]
       const skipVal = dp[i - 1][c]
+      opsA += 1
       if (w > c) {
         source = [[i - 1, c]]
         dp[i][c] = skipVal
@@ -75,6 +80,7 @@ export function runKnapsack({ weights, values, cap }: KnapsackInput): AlgoStep[]
   let bc = cap
   for (let i = n; i >= 1; i--) {
     active = [i, bc]
+    opsB += 1
     if (dp[i][bc] !== dp[i - 1][bc]) {
       chosen.unshift(`item ${i}`)
       bc -= weights[i - 1]

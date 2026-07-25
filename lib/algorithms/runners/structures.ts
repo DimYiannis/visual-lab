@@ -19,6 +19,8 @@ export function runHeap(values: number[]): AlgoStep[] {
   const popped: number[] = []
   let active: number[] = []
   let focus: number | null = null
+  let opsA = 0 // comparisons
+  let opsB = 0 // swaps
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -32,6 +34,8 @@ export function runHeap(values: number[]): AlgoStep[] {
         treeActive: [...active],
         treeFocus: focus,
         order: popped.map(String),
+        opsA,
+        opsB,
         done,
       },
     })
@@ -46,6 +50,7 @@ export function runHeap(values: number[]): AlgoStep[] {
     while (i > 0) {
       const p = (i - 1) >> 1
       active = [p, i]
+      opsA += 1
       push(10, `Parent a[${p}] = ${a[p]} vs new a[${i}] = ${a[i]}.`)
       if (a[p] <= a[i]) {
         push(11, `${a[p]} ≤ ${a[i]} — heap property holds, stop sifting.`)
@@ -53,6 +58,7 @@ export function runHeap(values: number[]): AlgoStep[] {
       }
       const child = a[i]
       ;[a[p], a[i]] = [a[i], a[p]]
+      opsB += 1
       push(12, `${child} bubbles up to index ${p}.`)
       i = p
       focus = i
@@ -80,6 +86,7 @@ export function runHeap(values: number[]): AlgoStep[] {
       let s = i
       if (l < a.length && a[l] < a[s]) s = l
       if (r < a.length && a[r] < a[s]) s = r
+      opsA += (l < a.length ? 1 : 0) + (r < a.length ? 1 : 0)
       active = [i, l, r].filter(k => k < a.length)
       if (l >= a.length) {
         push(24, `a[${i}] = ${a[i]} has no children — nowhere lower to go.`)
@@ -92,6 +99,7 @@ export function runHeap(values: number[]): AlgoStep[] {
       }
       const sink = a[i]
       ;[a[i], a[s]] = [a[s], a[i]]
+      opsB += 1
       push(28, `${sink} sinks; ${a[i]} rises to index ${i}.`)
       i = s
       focus = i
@@ -119,6 +127,7 @@ export function runBST(values: number[], target: number): AlgoStep[] {
   let visited: number[] = []
   let focus: number | null = null
   let found: number | null = null
+  let opsA = 0 // comparisons
 
   /** In-order rank → x, depth → y; recomputed per snapshot as the tree grows. */
   const layout = (): { snaps: TreeNodeSnap[]; links: Array<[number, number]> } => {
@@ -163,6 +172,8 @@ export function runBST(values: number[], target: number): AlgoStep[] {
         treeVisited: [...visited],
         treeFocus: focus,
         foundIndex: found,
+        opsA,
+        opsB: 0,
         done,
       },
     })
@@ -184,6 +195,7 @@ export function runBST(values: number[], target: number): AlgoStep[] {
       active = [cur]
       visited = [...visited, cur]
       const goLeft = v < nodes[cur].v
+      opsA += 1
       push(4, `${v} vs ${nodes[cur].v}: ${v} is ${goLeft ? 'smaller — left' : 'bigger (or equal) — right'}.`)
       const child = goLeft ? nodes[cur].left : nodes[cur].right
       if (child === null) {
@@ -211,6 +223,7 @@ export function runBST(values: number[], target: number): AlgoStep[] {
     active = [cur]
     visited = [...visited, cur]
     hops += 1
+    opsA += 1
     push(12, `${target} vs ${nodes[cur].v}.`)
     if (target === nodes[cur].v) {
       found = cur
@@ -237,6 +250,7 @@ export function runLinkedList(values: number[]): AlgoStep[] {
   let curr: number | null = 0
   let nxt: number | null = null
   let activeNode: number | null = null
+  let opsA = 0 // pointer reassignments
 
   const push = (line: number, note: string, done = false) => {
     const cursors: Record<string, number> = {}
@@ -252,6 +266,8 @@ export function runLinkedList(values: number[]): AlgoStep[] {
         listNext: [...next],
         listActive: activeNode,
         cursors,
+        opsA,
+        opsB: 0,
         done,
       },
     })
@@ -266,6 +282,7 @@ export function runLinkedList(values: number[]): AlgoStep[] {
       ? `Save next: None — ${values[curr]} is the last node.`
       : `Save next = ${values[nxt]} first, or the rest of the list is lost.`)
     next[curr] = prev
+    opsA += 1
     activeNode = curr
     push(11, prev === null
       ? `Flip: ${values[curr]} now points to None — it will be the tail.`
@@ -313,6 +330,8 @@ export function runTrie(words: string[], prefix: string): AlgoStep[] {
   let visited: number[] = []
   let focus: number | null = null
   let found: number | null = null
+  let opsA = 0 // char comparisons
+  let opsB = 0 // nodes created
 
   /** Leaves claim x slots left→right; parents center over their children. */
   const layout = (): { snaps: TreeNodeSnap[]; links: Array<[number, number]> } => {
@@ -361,6 +380,8 @@ export function runTrie(words: string[], prefix: string): AlgoStep[] {
         treeEnds: nodes.filter(n => n.isWord).map(n => n.id),
         foundIndex: found,
         order: [...completions],
+        opsA,
+        opsB,
         done,
       },
     })
@@ -374,11 +395,13 @@ export function runTrie(words: string[], prefix: string): AlgoStep[] {
     push(7, `insert("${word}") — every word starts at the root.`)
     for (const ch of word) {
       active = [node]
+      opsA += 1
       if (!(ch in nodes[node].kids)) {
         const id = nodes.length
         nodes.push({ id, ch, kids: {}, isWord: false })
         nodes[node].kids[ch] = id
         focus = id
+        opsB += 1
         push(10, `No '${ch}' branch here — grow one.`)
       } else {
         focus = nodes[node].kids[ch]
@@ -402,6 +425,7 @@ export function runTrie(words: string[], prefix: string): AlgoStep[] {
   let node = 0
   for (const ch of prefix) {
     active = [node]
+    opsA += 1
     if (!(ch in nodes[node].kids)) {
       push(18, `No '${ch}' branch — nothing starts with "${prefix}".`, true)
       return steps
@@ -436,6 +460,8 @@ export function runHashTable(keys: number[]): AlgoStep[] {
   const pending = [...keys]
   let activeKey: number | null = null
   let activeBucket: number | null = null
+  let opsA = 0 // keys hashed
+  let opsB = 0 // collisions
 
   const push = (line: number, note: string, done = false) => {
     steps.push({
@@ -447,6 +473,8 @@ export function runHashTable(keys: number[]): AlgoStep[] {
         pendingKeys: [...pending],
         activeKey,
         activeBucket,
+        opsA,
+        opsB,
         done,
       },
     })
@@ -457,6 +485,7 @@ export function runHashTable(keys: number[]): AlgoStep[] {
     activeKey = key
     activeBucket = null
     const h = key % HASH_BUCKETS
+    opsA += 1
     push(8, `hash(${key}) = ${key} % ${HASH_BUCKETS} = ${h} — computed, not searched.`)
     activeBucket = h
     const chain = buckets[h]
@@ -465,6 +494,7 @@ export function runHashTable(keys: number[]): AlgoStep[] {
       : `Bucket ${h} is empty — no duplicates possible.`)
     chain.push(key)
     pending.shift()
+    if (chain.length > 1) opsB += 1
     push(12, chain.length > 1
       ? `Collision! ${key} chains behind ${chain.slice(0, -1).join(', ')} in bucket ${h}.`
       : `${key} moves into bucket ${h}.`)
@@ -499,6 +529,8 @@ export function runLRU({ cap, keys, values, updateValue }: LRUInput): AlgoStep[]
   const list: Array<{ key: number; value: number }> = []
   const opsLog: string[] = []
   let evicted: number | null = null
+  let opsA = 0 // ops processed
+  let opsB = 0 // evictions
 
   type Op = { verb: 'get' | 'put'; key: number; value?: number; label: string }
   const plan: Op[] = [
@@ -524,6 +556,8 @@ export function runLRU({ cap, keys, values, updateValue }: LRUInput): AlgoStep[]
         lruEvicted: evicted,
         opsQueue: [...opsQueue],
         opsLog: [...opsLog],
+        opsA,
+        opsB,
         done,
       },
     })
@@ -533,6 +567,7 @@ export function runLRU({ cap, keys, values, updateValue }: LRUInput): AlgoStep[]
 
   for (const op of plan) {
     opsQueue.shift()
+    opsA += 1
     evicted = null
     if (op.verb === 'get') {
       const idx = list.findIndex(n => n.key === op.key)
@@ -559,6 +594,7 @@ export function runLRU({ cap, keys, values, updateValue }: LRUInput): AlgoStep[]
     if (list.length > cap) {
       const stale = list.pop()!
       evicted = stale.key
+      opsB += 1
       opsLog.push(`${op.label} → evicted ${stale.key}`)
       push(40, `Over capacity: drop the tail — key ${stale.key} was least recently used.`)
     } else {

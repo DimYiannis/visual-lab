@@ -425,7 +425,7 @@ function rightFork(i: number, n: number): number {
   return (i + 1) % n
 }
 
-function runPhilosophers(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+export function runPhilosophers(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
   const n = N_PHIL
   const forks: Array<number | null> = Array(n).fill(null)
   const phils: PhilState[] = Array.from({ length: n }, () => ({ phase: 'thinking', meals: 0 }))
@@ -544,7 +544,7 @@ const N_PRODUCERS = 3
 const ITEMS_PER_PRODUCER = 3
 const TOTAL_ITEMS = N_PRODUCERS * ITEMS_PER_PRODUCER
 
-function runProducerConsumer(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+export function runProducerConsumer(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
   const steps: ConcurrencyStep[] = []
   const buffer: number[] = []
   const producers: ProducerState[] = Array.from({ length: N_PRODUCERS }, (_, id) => ({
@@ -641,7 +641,7 @@ const N_READERS = 3
 const WRITES_TARGET = 3
 const READS_TARGET = 3
 
-function runReadersWriters(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+export function runReadersWriters(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
   const steps: ConcurrencyStep[] = []
   let value = 0
   let writerDone = 0
@@ -740,7 +740,7 @@ const N_COUNTER_THREADS = 2
 const INCREMENTS_PER_THREAD = 5
 const COUNTER_EXPECTED = N_COUNTER_THREADS * INCREMENTS_PER_THREAD
 
-function runLostUpdateCounter(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+export function runLostUpdateCounter(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
   const steps: ConcurrencyStep[] = []
   let counter = 0
   const threads: CounterThreadState[] = Array.from({ length: N_COUNTER_THREADS }, (_, id) => ({
@@ -819,7 +819,7 @@ const LOW_TARGET = 3
 const AGING_RATE = 1
 const STARVATION_DEMO_TICKS = 15
 
-function runStarvation(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
+export function runStarvation(variant: 'naive' | 'fixed'): ConcurrencyStep[] {
   const steps: ConcurrencyStep[] = []
   const threads: SchedThreadState[] = [
     { id: 'HIGH', base: HIGH_PRIORITY, effective: HIGH_PRIORITY, wait: 0, done: 0, target: 999 },
